@@ -3,3 +3,6 @@ pub mod model;
 pub mod parser;
 pub mod pipeline;
 pub mod preprocess;
+
+//Day 3
+pub mod stubgen;
