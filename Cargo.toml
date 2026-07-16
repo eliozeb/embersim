@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/embersim-core",
+    "crates/embersim-cli"
+]
+
+resolver = "2"
