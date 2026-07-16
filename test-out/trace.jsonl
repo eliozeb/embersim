@@ -1,0 +1,9 @@
+# EmberSim trace v1.0
+{"ts_ms":0,"peripheral":"GPIO","func":"HAL_GPIO_WritePin","args":"GPIOx,GPIO_Pin,PinState"}
+{"ts_ms":1,"peripheral":"GPIO","func":"HAL_GPIO_ReadPin","args":"GPIOx,GPIO_Pin"}
+{"ts_ms":2,"peripheral":"GPIO","func":"HAL_GPIO_WritePin","args":"GPIOx,GPIO_Pin,PinState"}
+{"ts_ms":3,"peripheral":"GPIO","func":"HAL_GPIO_ReadPin","args":"GPIOx,GPIO_Pin"}
+{"ts_ms":4,"peripheral":"GPIO","func":"HAL_GPIO_WritePin","args":"GPIOx,GPIO_Pin,PinState"}
+{"ts_ms":5,"peripheral":"GPIO","func":"HAL_GPIO_TogglePin","args":"GPIOx,GPIO_Pin"}
+{"ts_ms":6,"peripheral":"GPIO","func":"HAL_GPIO_ReadPin","args":"GPIOx,GPIO_Pin"}
+{"ts_ms":7,"peripheral":"GPIO","func":"HAL_GPIO_ReadPin","args":"GPIOx,GPIO_Pin"}

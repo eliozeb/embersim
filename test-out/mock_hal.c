@@ -1,10 +1,6 @@
 #include "mock_hal.h"
 #include <stdio.h>
-
-static void trace_log(const char *func, const char *fmt, ...) {
-    (void)func; (void)fmt;
-    /* TODO: implement trace logging in Day 5 */
-}
+#include "trace_log.h"
 
 __attribute__((weak)) HAL_StatusTypeDef HAL_GPIO_Init(GPIO_TypeDef* GPIOx, GPIO_InitTypeDef* GPIO_Init)
 {

@@ -1,5 +1,6 @@
 /* mock_state.c — Stateful GPIO simulation for host-native testing */
 #include "mock_hal.h"
+#include "trace_log.h"   // <-- ADD THIS
 #include <string.h>
 #include <stdint.h>
 
@@ -55,6 +56,7 @@ void mock_gpio_init(void)
 
 void HAL_GPIO_WritePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState)
 {
+    trace_log("HAL_GPIO_WritePin", "GPIOx,GPIO_Pin,PinState");  // <-- ADD THIS
     int port = gpio_port_index((uintptr_t)GPIOx);
     if (PinState == GPIO_PIN_SET) {
         gpio_pin_states[port] |= GPIO_Pin;
@@ -65,12 +67,14 @@ void HAL_GPIO_WritePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, GPIO_PinState Pin
 
 GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
 {
+    trace_log("HAL_GPIO_ReadPin", "GPIOx,GPIO_Pin");  // <-- ADD THIS
     int port = gpio_port_index((uintptr_t)GPIOx);
     return (gpio_pin_states[port] & GPIO_Pin) ? GPIO_PIN_SET : GPIO_PIN_RESET;
 }
 
 void HAL_GPIO_TogglePin(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
 {
+    trace_log("HAL_GPIO_TogglePin", "GPIOx,GPIO_Pin");  // <-- ADD THIS
     int port = gpio_port_index((uintptr_t)GPIOx);
     gpio_pin_states[port] ^= GPIO_Pin;
 }

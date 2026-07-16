@@ -1,9 +1,11 @@
 #ifndef MOCK_HAL_H
 #define MOCK_HAL_H
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
 
+/* Minimal HAL type definitions for host-native testing */
 typedef enum { HAL_OK = 0, HAL_ERROR = 1, HAL_BUSY = 2, HAL_TIMEOUT = 3 } HAL_StatusTypeDef;
 typedef struct { volatile uint32_t dummy; } GPIO_TypeDef;
 typedef struct { uint32_t dummy; } GPIO_InitTypeDef;

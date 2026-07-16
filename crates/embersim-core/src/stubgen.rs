@@ -6,22 +6,25 @@ use crate::model::HalFunction;
 /// Generate mock_hal.h and mock_hal.c from parsed HAL functions.
 pub fn generate(functions: &[HalFunction], output_dir: &Path) -> Result<()> {
     std::fs::create_dir_all(output_dir)?;
-    
+
     let header_path = output_dir.join("mock_hal.h");
     let impl_path = output_dir.join("mock_hal.c");
-    
+
     let mut h = std::fs::File::create(&header_path)?;
     let mut c = std::fs::File::create(&impl_path)?;
-    
-    // Header guard and includes
+
+    // ============================================================
+    // mock_hal.h
+    // ============================================================
     writeln!(h, "#ifndef MOCK_HAL_H")?;
     writeln!(h, "#define MOCK_HAL_H")?;
+    writeln!(h)?;
     writeln!(h, "#include <stdint.h>")?;
     writeln!(h, "#include <stdbool.h>")?;
     writeln!(h, "#include <stddef.h>")?;
     writeln!(h)?;
-    
-    // Minimal type definitions for x86 host compilation
+
+    writeln!(h, "/* Minimal HAL type definitions for host-native testing */")?;
     writeln!(h, "typedef enum {{ HAL_OK = 0, HAL_ERROR = 1, HAL_BUSY = 2, HAL_TIMEOUT = 3 }} HAL_StatusTypeDef;")?;
     writeln!(h, "typedef struct {{ volatile uint32_t dummy; }} GPIO_TypeDef;")?;
     writeln!(h, "typedef struct {{ uint32_t dummy; }} GPIO_InitTypeDef;")?;
@@ -71,30 +74,28 @@ pub fn generate(functions: &[HalFunction], output_dir: &Path) -> Result<()> {
     writeln!(h, "typedef struct {{ uint32_t dummy; }} PCDEx_HandleTypeDef;")?;
     writeln!(h, "typedef struct {{ uint32_t dummy; }} HCDEx_HandleTypeDef;")?;
     writeln!(h)?;
-    
+
     // Forward declarations
     for func in functions {
         writeln!(h, "{};", func.to_c_decl())?;
     }
-    
+
     writeln!(h)?;
     writeln!(h, "#endif /* MOCK_HAL_H */")?;
-    
-    // Implementation file
+
+    // ============================================================
+    // mock_hal.c
+    // ============================================================
     writeln!(c, "#include \"mock_hal.h\"")?;
     writeln!(c, "#include <stdio.h>")?;
+    writeln!(c, "#include \"trace_log.h\"")?;
     writeln!(c)?;
-    writeln!(c, "static void trace_log(const char *func, const char *fmt, ...) {{")?;
-    writeln!(c, "    (void)func; (void)fmt;")?;
-    writeln!(c, "    /* TODO: implement trace logging in Day 5 */")?;
-    writeln!(c, "}}")?;
-    writeln!(c)?;
-    
+
     for func in functions {
         // Emit as weak so mock_state.c can override with strong symbols
         writeln!(c, "__attribute__((weak)) {}", func.to_c_decl())?;
         writeln!(c, "{{")?;
-        
+
         // Generate trace_log call with parameter names
         let param_names: Vec<String> = func.params.iter().map(|p| p.name.clone()).collect();
         if !param_names.is_empty() {
@@ -102,7 +103,7 @@ pub fn generate(functions: &[HalFunction], output_dir: &Path) -> Result<()> {
         } else {
             writeln!(c, "    trace_log(\"{}\", \"\");", func.name)?;
         }
-        
+
         // Return default value based on return type
         let ret = match func.return_type.as_str() {
             "HAL_StatusTypeDef" => "    return HAL_OK;",
@@ -116,8 +117,8 @@ pub fn generate(functions: &[HalFunction], output_dir: &Path) -> Result<()> {
         writeln!(c)?;
     }
 
-        // ============================================================
-    // INSERT THE TEMPLATE COPY HERE
+    // ============================================================
+    // Copy mock_state.c template if it exists
     // ============================================================
     let template_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
     let state_template = template_dir.join("mock_state.c");
@@ -125,7 +126,6 @@ pub fn generate(functions: &[HalFunction], output_dir: &Path) -> Result<()> {
         let dest = output_dir.join("mock_state.c");
         std::fs::copy(&state_template, &dest)?;
     }
-    // ============================================================
-    
+
     Ok(())
 }
