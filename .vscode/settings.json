@@ -1,0 +1,16 @@
+{
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "always"
+    },
+
+    "rust-analyzer.check.command": "clippy",
+
+    "rust-analyzer.cargo.allFeatures": true,
+
+    "rust-analyzer.procMacro.enable": true,
+
+    "files.trimTrailingWhitespace": true,
+
+    "editor.inlayHints.enabled": "on"
+}
