@@ -1,0 +1,14 @@
+{
+    "mocks": {
+      "gpio": {
+        "inputs": {
+          "GPIOA": { "pin_0": 1, "pin_1": 0 }
+        }
+      },
+      "uart": {
+        "USART1": {
+          "rx_bytes": ["0x48", "0x49", "0x0A"]
+        }
+      }
+    }
+  }
