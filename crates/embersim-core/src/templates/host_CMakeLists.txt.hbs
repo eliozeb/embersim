@@ -5,25 +5,24 @@ project({{project_name}}_host LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# Compiler flags for host x86
+# Compiler flags
 if(UNIX)
     add_compile_options(-Wall -Wextra -g)
 elseif(WIN32)
     add_compile_options(/W4 /Zi)
 endif()
 
-# Include directories: mocks for mock_hal.h, trace_log.h, etc.
+# Include mocks directory
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/mocks")
 
-# Source files:
-# 1. User application sources (from embersim.json)
+# User application sources (relative to project root, from embersim.json)
 set(USER_SOURCES
 {{#each user_sources}}
-    "{{this}}"
+    "../{{this}}"
 {{/each}}
 )
 
-# 2. EmberSim runtime sources
+# EmberSim runtime sources
 set(EMBERSIM_SOURCES
     "mocks/mock_hal.c"
     "mocks/trace_log.c"
@@ -32,10 +31,10 @@ set(EMBERSIM_SOURCES
     "host_main.c"
 )
 
-# Combine all sources
+# Combined executable
 add_executable(embersim_host ${USER_SOURCES} ${EMBERSIM_SOURCES})
 
-# Optional: enable coverage flags
+# Optional coverage
 if(COVERAGE)
     target_compile_options(embersim_host PRIVATE --coverage)
     target_link_options(embersim_host PRIVATE --coverage)
