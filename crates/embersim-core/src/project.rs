@@ -18,6 +18,11 @@ pub fn initialize(
     fs::write(output_dir.join("mocks/trace_log.c"), crate::templates::TRACE_LOG_C)?;
     fs::write(output_dir.join("mocks/mock_state.c"), crate::templates::MOCK_STATE_C)?;
     fs::write(output_dir.join("mocks/mock_uart.c"), crate::templates::MOCK_UART_C)?;
+    fs::write(output_dir.join("mocks/mock_i2c.c"), crate::templates::MOCK_I2C_C)?;
+    fs::write(output_dir.join("mocks/mock_spi.h"), crate::templates::MOCK_SPI_H)?;
+    fs::write(output_dir.join("mocks/mock_spi.c"), crate::templates::MOCK_SPI_C)?;
+    fs::write(output_dir.join("mocks/mock_tim.h"), crate::templates::MOCK_TIM_H)?;
+    fs::write(output_dir.join("mocks/mock_tim.c"), crate::templates::MOCK_TIM_C)?;
     fs::write(output_dir.join("host_main.c"), crate::templates::HOST_MAIN_C)?;
 
     eprintln!("EmberSim workspace initialized in: {}", output_dir.display());

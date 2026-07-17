@@ -1,0 +1,11 @@
+# EmberSim trace v1.0
+{"ts_ms":0,"peripheral":"TIM","func":"HAL_TIM_Base_Start","inst":"0x40000400"}
+{"ts_ms":1,"peripheral":"TIM","func":"HAL_TIM_PeriodElapsedCallback","inst":"0x40000400"}
+{"ts_ms":2,"peripheral":"TIM","func":"HAL_TIM_PWM_PulseFinishedCallback","inst":"0x40000400"}
+{"ts_ms":3,"peripheral":"TIM","func":"HAL_TIM_PWM_Start","inst":"0x40000400","ch":1}
+{"ts_ms":4,"peripheral":"TIM","func":"HAL_TIM_PeriodElapsedCallback","inst":"0x40000400"}
+{"ts_ms":5,"peripheral":"TIM","func":"HAL_TIM_PWM_PulseFinishedCallback","inst":"0x40000400"}
+{"ts_ms":6,"peripheral":"TIM","func":"HAL_TIM_PeriodElapsedCallback","inst":"0x40000400"}
+{"ts_ms":7,"peripheral":"TIM","func":"HAL_TIM_PWM_PulseFinishedCallback","inst":"0x40000400"}
+{"ts_ms":8,"peripheral":"TIM","func":"HAL_TIM_IC_Start_IT","inst":"0x40000400","ch":2}
+{"ts_ms":9,"peripheral":"TIM","func":"HAL_TIM_IC_CaptureCallback","inst":"0x40000400"}
