@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+
+// --------------------- HAL Function Models ---------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Parameter {
@@ -35,23 +36,22 @@ impl HalFunction {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct Project {
-    pub name: String,
-    pub root: PathBuf,
-    pub hal_header: Option<PathBuf>,
-    pub include_paths: Vec<String>,
-    pub source_files: Vec<PathBuf>,
+// --------------------- Project Config (embersim.json) ---------------------
+// ONLY ONE ProjectConfig and ONE Project definition below.
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProjectConfig {
+    pub project: Project,
 }
 
-impl Project {
-    pub fn new(root: PathBuf) -> Self {
-        Self {
-            name: root.file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "untitled".to_string()),
-            root,
-            ..Default::default()
-        }
-    }
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Project {
+    pub name: String,
+    pub source_files: Vec<String>,   // paths relative to project root
+    #[serde(default)]
+    pub exclude_files: Vec<String>,
+    #[serde(default)]
+    pub hal_path: String,
+    #[serde(default)]
+    pub hal_conf: String,
 }

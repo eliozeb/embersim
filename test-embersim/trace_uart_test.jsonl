@@ -1,0 +1,12 @@
+# EmberSim trace v1.0
+{"ts_ms":0,"peripheral":"UART","func":"HAL_UART_Transmit","inst":"0x40011000","data":"48656C6C6F","sz":5,"mode":"BLOCK"}
+{"ts_ms":1,"peripheral":"UART","func":"HAL_UART_Receive","inst":"0x40011000","data":"4849","sz":2}
+{"ts_ms":2,"peripheral":"UART","func":"HAL_UART_Receive","inst":"0x40011000","data":"4142","sz":2,"requested":5,"status":"TIMEOUT"}
+{"ts_ms":3,"peripheral":"UART","func":"HAL_UART_Transmit_IT","inst":"0x40011000","data":"58","sz":1,"mode":"IT"}
+{"ts_ms":4,"peripheral":"UART","func":"HAL_UART_TxCpltCallback","inst":"0x40011000"}
+{"ts_ms":5,"peripheral":"UART","func":"HAL_UART_Receive_IT","inst":"0x40011000","data":"4A4B4C","sz":3,"mode":"IT"}
+{"ts_ms":6,"peripheral":"UART","func":"HAL_UART_RxCpltCallback","inst":"0x40011000"}
+{"ts_ms":7,"peripheral":"UART","func":"HAL_UART_Transmit_DMA","inst":"0x40011000","data":"444D41","sz":3,"mode":"DMA"}
+{"ts_ms":8,"peripheral":"UART","func":"HAL_UART_TxCpltCallback","inst":"0x40011000"}
+{"ts_ms":9,"peripheral":"UART","func":"HAL_UART_Transmit","inst":"0x40011000","data":"45","sz":1,"mode":"BLOCK"}
+{"ts_ms":10,"peripheral":"UART","func":"HAL_UART_ErrorCallback","inst":"0x40011000","error":"PE"}
