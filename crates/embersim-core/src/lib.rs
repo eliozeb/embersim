@@ -10,3 +10,6 @@ pub mod stubgen;
 //Day 4
 pub mod templates;
 pub mod project;
+
+//Day 9
+pub mod discovery;
