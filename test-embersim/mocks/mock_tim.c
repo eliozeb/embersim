@@ -139,6 +139,7 @@ static void tim_tick(EmberPeripheral *p, uint64_t now_us) {
         cnt = 0;
         ember_reg_write(&tim_map, IDX_CNT, cnt, "overflow", 0);
         ember_reg_set_bits(&tim_map, IDX_SR, 0x0001, "UIF set", 0);
+        ember_bus_publish(BUS_EVT_TIMER_UPDATE, p->base_address, 0, NULL);
         // schedule a timer update event
         kernel_schedule_event(0, KERN_EVT_TIM_UPDATE, p->base_address, 0, 0);
     } else {

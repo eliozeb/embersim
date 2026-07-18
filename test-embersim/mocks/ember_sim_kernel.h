@@ -64,6 +64,42 @@ typedef struct EmberPeripheral {
 } EmberPeripheral;
 
 
+/* ---------- Bus event types (observable notifications) ---------- */
+typedef enum {
+    BUS_EVT_TIMER_UPDATE,
+    BUS_EVT_REGISTER_CHANGED,
+    // future: UART_TX, SPI_DONE, etc.
+} BusEventType;
+
+typedef struct {
+    uint32_t    base_address;
+    const char *reg_name;
+    uint32_t    old_value;
+    uint32_t    new_value;
+    const char *reason;
+} BusRegChangePayload;
+
+typedef struct BusEvent {
+    uint32_t        timestamp_us;
+    BusEventType    type;
+    uint32_t        source;
+    uint32_t        param;
+    union {
+        BusRegChangePayload reg;
+    } data;
+    struct BusEvent *next;
+} BusEvent;
+
+/* ---------- Bus subscriber ---------- */
+typedef void (*BusSubscriberCallback)(const BusEvent *ev);
+
+/* priority: lower number = higher priority */
+void ember_bus_subscribe(int priority, BusSubscriberCallback cb);
+void ember_bus_publish(BusEventType type, uint32_t source, uint32_t param,
+                       const BusEvent *payload_template); // simplified later
+void ember_bus_dispatch_all(void);
+void ember_bus_init(void);
+
 /* ---------- kernel API ---------- */
 void     kernel_init(void);
 uint64_t kernel_now_us(void);
