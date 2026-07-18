@@ -137,6 +137,11 @@ uint64_t kernel_now_us(void) {
     return sim_time_us;
 }
 
+void kernel_step(void) {
+    kernel_advance_ticks(1);
+    kernel_dispatch_pending();
+}
+
 void kernel_register_peripheral(EmberPeripheral *p) {
     if (peripheral_count < MAX_PERIPHERALS) {
         peripherals[peripheral_count++] = p;
@@ -176,8 +181,9 @@ void kernel_dispatch_pending(void) {
 
 void kernel_run_until(uint64_t deadline_us) {
     while (sim_time_us < deadline_us) {
-        kernel_advance_ticks(1);
-        kernel_dispatch_pending();
+        kernel_step();
+        //kernel_advance_ticks(1);
+        //kernel_dispatch_pending();
     }
 }
 

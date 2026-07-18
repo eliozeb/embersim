@@ -90,6 +90,10 @@ typedef struct BusEvent {
     struct BusEvent *next;
 } BusEvent;
 
+/* Perform one full simulation step: advance peripherals, flush hardware events,
+   then dispatch any resulting interrupts. */
+void kernel_step(void);
+
 /* ---------- Bus subscriber ---------- */
 typedef void (*BusSubscriberCallback)(const BusEvent *ev);
 
