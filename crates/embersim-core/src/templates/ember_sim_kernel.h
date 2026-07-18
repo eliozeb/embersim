@@ -70,7 +70,7 @@ typedef enum {
     BUS_EVT_UART_TX_DONE,
     BUS_EVT_UART_RX_DONE,
     BUS_EVT_REGISTER_CHANGED,
-    BUS_EVT_COUNT
+    BUS_EVT_COUNT   // if you have a count, keep it last
 } BusEventType;
 
 typedef struct {

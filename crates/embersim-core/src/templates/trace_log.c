@@ -27,7 +27,6 @@ void trace_log(const char *func, const char *json_payload)
 
     const char *peripheral = "UNKNOWN";
     if (strncmp(func, "HAL_GPIO", 8) == 0) peripheral = "GPIO";
-    else if (strncmp(func, "HAL_UART", 8) == 0) peripheral = "UART";
     else if (strncmp(func, "HAL_I2C", 7) == 0) peripheral = "I2C";
     else if (strncmp(func, "HAL_SPI", 7) == 0) peripheral = "SPI";
     else if (strncmp(func, "HAL_TIM", 7) == 0) peripheral = "TIM";

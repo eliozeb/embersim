@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include "mock_hal.h"
-#include "mock_uart.h"
 #include "ember_sim_kernel.h"
 #include "trace_log.h"
 
+/* UART API (from mock_uart.h) */
 extern void mock_uart_init(void);
 extern void mock_uart_set_rx(uintptr_t base, const uint8_t *bytes, uint16_t len);
 extern const uint8_t *mock_uart_get_tx(uintptr_t base, uint16_t *len);
@@ -12,10 +12,12 @@ extern const uint8_t *mock_uart_get_tx(uintptr_t base, uint16_t *len);
 static int tx_cplt = 0, rx_cplt = 0;
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+    (void)huart;
     tx_cplt++;
     trace_software_event("UART", "tx_complete", "{}");
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    (void)huart;
     rx_cplt++;
     trace_software_event("UART", "rx_complete", "{}");
 }
@@ -44,7 +46,7 @@ int main(void) {
 
     /* Test 2: Blocking RX */
     {
-        uint8_t rx_data[] = {0x48, 0x49}; // "HI"
+        uint8_t rx_data[] = {0x48, 0x49};
         mock_uart_set_rx(0x40004400, rx_data, 2);
         uint8_t buf[8] = {0};
         HAL_StatusTypeDef st = HAL_UART_Receive(&huart, buf, 2, 100);
@@ -70,7 +72,7 @@ int main(void) {
         rx_cplt = 0;
         uint8_t rx_data[] = {0x4A};
         mock_uart_set_rx(0x40004400, rx_data, 1);
-        HAL_UART_Receive_IT(&huart, NULL, 1); // Size param ignored in this simplified mock
+        HAL_UART_Receive_IT(&huart, NULL, 1);
         kernel_run_until(5);
         if (rx_cplt == 1)
             printf("PASS: IT RX callback\n");

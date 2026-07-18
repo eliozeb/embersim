@@ -7,10 +7,10 @@
 #include <stdio.h>
 
 /* Forward declarations for callbacks */
-void HAL_UART_IRQHandler(UART_HandleTypeDef *huart);
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart);
+void HAL_UART_IRQHandler(UART_HandleTypeDef *huart);
 
 /* Private peripheral functions */
 static void uart_tick(EmberPeripheral *p, uint64_t now_us);
@@ -44,12 +44,11 @@ static uint16_t tx_len, tx_pos;
 static uint8_t  rx_buf[256];
 static uint16_t rx_len, rx_pos;
 static bool     tx_active = false;
-static uint32_t baud_div = 115200 / 1000000; // simplistic: bytes per us? We'll use a cycle count.
 
 /* ----- Public API (for tests) ----- */
 void mock_uart_init(void) {
     memset(uart_regs, 0, sizeof(uart_regs));
-    uart_regs[UART_SR].name = "SR";   uart_regs[UART_SR].writable_mask = 0x0000; // read-only
+    uart_regs[UART_SR].name = "SR";   uart_regs[UART_SR].writable_mask = 0x0000;
     uart_regs[UART_DR].name = "DR";   uart_regs[UART_DR].writable_mask = 0x00FF;
     uart_regs[UART_CR1].name = "CR1"; uart_regs[UART_CR1].writable_mask = 0xFFFF;
     uart_regs[UART_BRR].name = "BRR"; uart_regs[UART_BRR].writable_mask = 0xFFFF;
@@ -57,7 +56,7 @@ void mock_uart_init(void) {
 
     uart_peripheral.name         = "USART2";
     uart_peripheral.base_address = 0x40004400;
-    uart_peripheral.irq_number   = 38; // USART2_IRQn
+    uart_peripheral.irq_number   = 38;
     uart_peripheral.state        = NULL;
     uart_peripheral.init         = uart_init_fn;
     uart_peripheral.tick         = uart_tick;
@@ -119,8 +118,8 @@ HAL_StatusTypeDef HAL_UART_Transmit_IT(UART_HandleTypeDef *huart, uint8_t *pData
 }
 
 HAL_StatusTypeDef HAL_UART_Receive_IT(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size) {
+    (void)pData; (void)Size;
     ember_reg_set_bits(&uart_map, UART_CR1, UART_CR1_RXNEIE, "enable RXNEIE", 0);
-    // RX will be triggered by peripheral tick when bytes are injected
     return HAL_OK;
 }
 
@@ -128,14 +127,12 @@ HAL_StatusTypeDef HAL_UART_Receive_IT(UART_HandleTypeDef *huart, uint8_t *pData,
 static void uart_tick(EmberPeripheral *p, uint64_t now_us) {
     (void)now_us;
 
-    /* Transmit: after each tick, we simulate one byte sent */
+    /* Transmit: one byte per tick (simplified) */
     if (tx_active && (tx_pos < tx_len)) {
         tx_pos++;
         if (tx_pos >= tx_len) {
             tx_active = false;
-            // Set TXE and TC flags
             ember_reg_set_bits(&uart_map, UART_SR, UART_SR_TXE | UART_SR_TC, "TX complete", 0);
-            // Publish event if interrupt enabled
             uint32_t cr1 = ember_reg_read(&uart_map, UART_CR1);
             if (cr1 & UART_CR1_TXEIE) {
                 ember_bus_publish(BUS_EVT_UART_TX_DONE, p->base_address, 0, NULL);
@@ -143,7 +140,7 @@ static void uart_tick(EmberPeripheral *p, uint64_t now_us) {
         }
     }
 
-    /* Receive: if bytes available in rx_buf, set RXNE */
+    /* Receive: if data available, set RXNE */
     if (rx_pos < rx_len) {
         ember_reg_set_bits(&uart_map, UART_SR, UART_SR_RXNE, "RX byte ready", 0);
         uint32_t cr1 = ember_reg_read(&uart_map, UART_CR1);
@@ -165,7 +162,7 @@ static void uart_irq_handler(void) {
 
 /* ----- HAL IRQ Handler (called via NVIC dispatcher) ----- */
 void HAL_UART_IRQHandler(UART_HandleTypeDef *huart) {
-    uint32_t sr = ember_reg_read(&uart_map, UART_SR);
+    uint32_t sr  = ember_reg_read(&uart_map, UART_SR);
     uint32_t cr1 = ember_reg_read(&uart_map, UART_CR1);
 
     if ((sr & UART_SR_TXE) && (cr1 & UART_CR1_TXEIE)) {
@@ -174,8 +171,6 @@ void HAL_UART_IRQHandler(UART_HandleTypeDef *huart) {
     }
     if (sr & UART_SR_RXNE) {
         ember_reg_clear_bits(&uart_map, UART_SR, UART_SR_RXNE, "clear RXNE", 0);
-        // read byte from rx_buf?
-        // The HAL callback typically reads DR; we'll just call the callback
         HAL_UART_RxCpltCallback(huart);
     }
     if (sr & UART_SR_TC) {
