@@ -66,7 +66,12 @@ int main(void) {
         failures++;
     } else printf("PASS: PWM pulse finished via runtime\n");
 
-    /* Test 3: input capture */
+    /* Test 3: input capture *//* Stop PWM before input capture test */
+    /* Stop PWM before input capture test */
+    HAL_TIM_PWM_Stop(&htim2, 1);
+    HAL_TIM_Base_Stop_IT(&htim2);
+
+
     ic_cb = 0;
     mock_tim_inject_capture(0x40000400, 2, 12345);
     HAL_TIM_IC_Start_IT(&htim2, 2);
@@ -133,4 +138,5 @@ int main(void) {
     if (!failures) printf("\nALL RUNTIME TESTS PASSED\n");
     else printf("\n%d TEST(S) FAILED\n", failures);
     return failures;
+    
 }

@@ -4,10 +4,11 @@
 #include <string.h>
 #include <stdio.h>
 
-#define MAX_PERIPHERALS 8
-#define MAX_EVENTS      64
+#define MAX_PERIPHERALS     8
+#define MAX_EVENTS          64
 #define MAX_BUS_SUBSCRIBERS 8
 #define MAX_BUS_EVENTS      64
+#define MAX_IRQ_HANDLERS    64
 
 /* ---------- Peripheral list ---------- */
 static EmberPeripheral *peripherals[MAX_PERIPHERALS];
@@ -32,8 +33,17 @@ static struct {
 } bus_subscribers[MAX_BUS_SUBSCRIBERS];
 static int bus_sub_count = 0;
 
-/* ---------- Forward declaration for trace handler ---------- */
+/* ---------- NVIC state ---------- */
+static bool nvic_pending[64];
+static bool nvic_enabled_flags[64];
+
+/* ---------- IRQ handler table (generic) ---------- */
+typedef void (*IrqHandler)(void);
+static IrqHandler irq_handlers[MAX_IRQ_HANDLERS];
+
+/* ---------- Forward declarations ---------- */
 static void trace_bus_handler(const BusEvent *ev);
+static void nvic_bus_handler(const BusEvent *ev);
 
 /* =================================================================
    Event pool management (kernel events)
@@ -105,7 +115,6 @@ static void process_events(void) {
         KernelEvent *ev = queue_head;
         queue_head = ev->next;
 
-        /* Let the target peripheral handle the event */
         for (int i = 0; i < peripheral_count; i++) {
             if (peripherals[i]->base_address == ev->source && peripherals[i]->handle_event) {
                 peripherals[i]->handle_event(peripherals[i], ev);
@@ -128,18 +137,17 @@ void kernel_init(void) {
     queue_head = NULL;
     bus_queue_head = NULL;
     bus_sub_count = 0;
+    memset(nvic_pending, 0, sizeof(nvic_pending));
+    memset(nvic_enabled_flags, 0, sizeof(nvic_enabled_flags));
+    memset(irq_handlers, 0, sizeof(irq_handlers));
 
-    /* Register built‑in subscribers */
-    ember_bus_subscribe(20, trace_bus_handler);
+    /* built‑in subscribers */
+    ember_bus_subscribe(10, nvic_bus_handler);   // NVIC reacts early
+    ember_bus_subscribe(20, trace_bus_handler);  // trace after NVIC
 }
 
 uint64_t kernel_now_us(void) {
     return sim_time_us;
-}
-
-void kernel_step(void) {
-    kernel_advance_ticks(1);
-    kernel_dispatch_pending();
 }
 
 void kernel_register_peripheral(EmberPeripheral *p) {
@@ -174,25 +182,33 @@ void kernel_advance_ticks(uint32_t us) {
 }
 
 void kernel_dispatch_pending(void) {
-    
-    ember_bus_dispatch_all();
-    process_events();
+    ember_bus_dispatch_all();   // hardware notifications (NVIC sets pending)
+    process_events();           // residual peripheral events
+
+    /* NVIC arbitration + HAL dispatch */
+    int irq;
+    while ((irq = nvic_resolve()) >= 0) {
+        nvic_dispatch_irq(irq);
+        nvic_clear_pending(irq);
+    }
 }
 
 void kernel_run_until(uint64_t deadline_us) {
     while (sim_time_us < deadline_us) {
-        kernel_step();
-        //kernel_advance_ticks(1);
-        //kernel_dispatch_pending();
+        kernel_advance_ticks(1);
+        kernel_dispatch_pending();
     }
+}
+
+void kernel_step(void) {
+    kernel_advance_ticks(1);
+    kernel_dispatch_pending();
 }
 
 /* =================================================================
    Event bus implementation
    ================================================================= */
-void ember_bus_init(void) {
-    /* already done in kernel_init; kept as public for future reuse */
-}
+void ember_bus_init(void) { /* done in kernel_init */ }
 
 void ember_bus_subscribe(int priority, BusSubscriberCallback cb) {
     if (bus_sub_count >= MAX_BUS_SUBSCRIBERS) return;
@@ -219,7 +235,6 @@ void ember_bus_publish(BusEventType type, uint32_t source, uint32_t param,
     if (payload_template) {
         memcpy(&ev->data, &payload_template->data, sizeof(ev->data));
     }
-    /* append to bus queue */
     ev->next = NULL;
     if (!bus_queue_head) {
         bus_queue_head = ev;
@@ -242,6 +257,47 @@ void ember_bus_dispatch_all(void) {
 }
 
 /* =================================================================
+   NVIC helpers
+   ================================================================= */
+static uint32_t periph_to_irq(uint32_t base) {
+    switch (base) {
+        case 0x40000400: return 28; // TIM2
+        default:         return 0;
+    }
+}
+
+static void nvic_bus_handler(const BusEvent *ev) {
+    uint32_t irq = periph_to_irq(ev->source);
+    if (irq) nvic_set_pending(irq);
+}
+
+void nvic_register_handler(uint32_t irq, IrqHandler handler) {
+    if (irq < MAX_IRQ_HANDLERS) irq_handlers[irq] = handler;
+}
+
+int nvic_resolve(void) {
+    for (int i = 0; i < 64; i++) {
+        if (nvic_pending[i] && nvic_enabled_flags[i]) return i;
+    }
+    return -1;
+}
+
+void nvic_dispatch_irq(int irq) {
+    char details[64];
+    snprintf(details, sizeof(details), "{\"irq\":%d}", irq);
+    trace_log("NVIC_DISPATCH", details);
+    if (irq_handlers[irq]) {
+        irq_handlers[irq]();
+    }
+}
+
+void nvic_set_pending(uint32_t irq) { nvic_pending[irq] = true; }
+void nvic_clear_pending(uint32_t irq) { nvic_pending[irq] = false; }
+bool nvic_is_pending(uint32_t irq) { return nvic_pending[irq]; }
+void nvic_enable(uint32_t irq) { nvic_enabled_flags[irq] = true; }
+void nvic_disable(uint32_t irq) { nvic_enabled_flags[irq] = false; }
+
+/* =================================================================
    Trace bus handler (subscribes to all bus events)
    ================================================================= */
 static void trace_bus_handler(const BusEvent *ev) {
@@ -249,14 +305,14 @@ static void trace_bus_handler(const BusEvent *ev) {
         case BUS_EVT_TIMER_UPDATE: {
             char details[128];
             snprintf(details, sizeof(details),
-                     "{\"timer\":\"%08x\",\"cause\":\"update\"}", ev->source);
+                     "{\"layer\":\"hardware\",\"timer\":\"%08x\",\"cause\":\"update\"}", ev->source);
             trace_log("HARDWARE_EVENT", details);
             break;
         }
         case BUS_EVT_REGISTER_CHANGED: {
             char payload[256];
             snprintf(payload, sizeof(payload),
-                     "\"origin\":\"register\",\"peripheral\":\"%s\",\"address\":\"0x%08X\",\"register\":\"%s\",\"old\":\"0x%04X\",\"new\":\"0x%04X\",\"reason\":\"%s\"",
+                     "\"origin\":\"register\",\"layer\":\"hardware\",\"peripheral\":\"%s\",\"address\":\"0x%08X\",\"register\":\"%s\",\"old\":\"0x%04X\",\"new\":\"0x%04X\",\"reason\":\"%s\"",
                      "TIM2",
                      ev->data.reg.base_address,
                      ev->data.reg.reg_name,
@@ -271,24 +327,12 @@ static void trace_bus_handler(const BusEvent *ev) {
 }
 
 /* =================================================================
-   NVIC stubs
-   ================================================================= */
-static bool nvic_pending[64];
-static bool nvic_enabled_flags[64];
-
-void nvic_set_pending(uint32_t irq) { nvic_pending[irq] = true; }
-void nvic_clear_pending(uint32_t irq) { nvic_pending[irq] = false; }
-bool nvic_is_pending(uint32_t irq) { return nvic_pending[irq]; }
-void nvic_enable(uint32_t irq) { nvic_enabled_flags[irq] = true; }
-void nvic_disable(uint32_t irq) { nvic_enabled_flags[irq] = false; }
-
-/* =================================================================
    Software trace helper (used by mock_tim.c)
    ================================================================= */
 void trace_software_event(const char *component, const char *event, const char *details_json) {
     char payload[512];
     snprintf(payload, sizeof(payload),
-             "\"origin\":\"software\",\"component\":\"%s\",\"event\":\"%s\",\"details\":%s",
+             "\"origin\":\"software\",\"layer\":\"hal\",\"component\":\"%s\",\"event\":\"%s\",\"details\":%s",
              component, event, details_json ? details_json : "{}");
     trace_log("SOFTWARE_EVENT", payload);
 }

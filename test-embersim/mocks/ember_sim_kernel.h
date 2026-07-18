@@ -97,6 +97,13 @@ void kernel_step(void);
 /* ---------- Bus subscriber ---------- */
 typedef void (*BusSubscriberCallback)(const BusEvent *ev);
 
+/* NVIC resolution – returns the highest priority pending IRQ, or -1 if none */
+int  nvic_resolve(void);
+void nvic_dispatch_irq(int irq);
+
+typedef void (*IrqHandler)(void);
+void nvic_register_handler(uint32_t irq, IrqHandler handler);
+
 /* priority: lower number = higher priority */
 void ember_bus_subscribe(int priority, BusSubscriberCallback cb);
 void ember_bus_publish(BusEventType type, uint32_t source, uint32_t param,

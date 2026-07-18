@@ -26,6 +26,11 @@ static void tim_tick(EmberPeripheral *p, uint64_t now_us) {
     uint32_t arr = ember_reg_read(&tim2_map, 4);
     uint32_t cnt = ember_reg_read(&tim2_map, 2);
 
+    uint32_t dier = ember_reg_read(&tim_map, IDX_DIER);
+    if (dier & TIM_DIER_UIE) {
+        ember_bus_publish(BUS_EVT_TIMER_UPDATE, p->base_address, 0, NULL);
+    }
+
     cnt++;
     if (cnt > arr) {
         cnt = 0;

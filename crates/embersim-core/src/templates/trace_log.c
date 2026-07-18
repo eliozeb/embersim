@@ -21,14 +21,6 @@ void trace_log_close(void)
     }
 }
 
-void trace_reg_change(const char *peripheral, uint32_t addr, const char *reg,uint32_t old_val, uint32_t new_val, const char *reason) {
-    char payload[256];
-    snprintf(payload, sizeof(payload),
-    "\"origin\":\"register\",\"peripheral\":\"%s\",\"address\":\"0x%08X\",\"register\":\"%s\",\"old\":\"0x%04X\",\"new\":\"0x%04X\",\"reason\":\"%s\"",
-    peripheral, addr, reg, old_val, new_val, reason);
-    trace_log("REGISTER_EVENT", payload);
-}
-
 void trace_log(const char *func, const char *json_payload)
 {
     if (!trace_file) return;
@@ -46,6 +38,7 @@ void trace_log(const char *func, const char *json_payload)
     if (strncmp(func, "HARDWARE_EVENT", 14) == 0) peripheral = "runtime";
     else if (strncmp(func, "SOFTWARE_EVENT", 14) == 0) peripheral = "runtime";
     else if (strncmp(func, "REGISTER_EVENT", 14) == 0) peripheral = "runtime";
+    else if (strncmp(func, "NVIC_DISPATCH", 13) == 0) peripheral = "runtime";
 
     fprintf(trace_file,
         "{\"ts_ms\":%u,\"peripheral\":\"%s\",\"func\":\"%s\",%s}\n",
