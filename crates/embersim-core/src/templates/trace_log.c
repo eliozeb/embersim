@@ -21,12 +21,11 @@ void trace_log_close(void)
     }
 }
 
-void trace_reg_change(const char *peripheral, uint32_t addr, const char *reg,
-    uint32_t old_val, uint32_t new_val) {
+void trace_reg_change(const char *peripheral, uint32_t addr, const char *reg,uint32_t old_val, uint32_t new_val, const char *reason) {
     char payload[256];
     snprintf(payload, sizeof(payload),
-    "\"origin\":\"register\",\"peripheral\":\"%s\",\"address\":\"0x%08X\",\"register\":\"%s\",\"old\":\"0x%04X\",\"new\":\"0x%04X\"",
-    peripheral, addr, reg, old_val, new_val);
+    "\"origin\":\"register\",\"peripheral\":\"%s\",\"address\":\"0x%08X\",\"register\":\"%s\",\"old\":\"0x%04X\",\"new\":\"0x%04X\",\"reason\":\"%s\"",
+    peripheral, addr, reg, old_val, new_val, reason);
     trace_log("REGISTER_EVENT", payload);
 }
 

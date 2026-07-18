@@ -16,4 +16,6 @@ void mock_tim_inject_capture(uintptr_t tim_base, uint32_t channel, uint32_t valu
 /* Call this from the host loop to advance timer state */
 void ember_sim_tim_tick(void);
 
+uint32_t mock_tim_get_sr(uintptr_t base);
+
 #endif

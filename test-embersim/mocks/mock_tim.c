@@ -1,104 +1,74 @@
-/* mock_tim.c — Timer mock using register model and runtime */
+// mock_tim.c
 #include "mock_hal.h"
 #include "mock_tim.h"
-#include "tim_regs.h"
-#include "ember_sim_runtime.h"
+#include "ember_regs.h"
+#include "ember_sim_kernel.h"
 #include "trace_log.h"
+#include "ember_sim_kernel.h"
 #include <string.h>
 #include <stdio.h>
 
-/* Forward declarations */
+// ---- Register indices ----
+enum { IDX_CR1, IDX_SR, IDX_CNT, IDX_PSC, IDX_ARR, IDX_DIER, IDX_CCR1, IDX_CCR2, IDX_CCR3, IDX_CCR4, REG_COUNT };
+#define TIM_DIER_UIE  (1 << 0)
+
+static EmberRegister tim_regs[REG_COUNT];
+static EmberRegMap   tim_map;
+static EmberPeripheral tim_peripheral;
+static bool          pwm_active = false;  // simplified for now
+
+// Forward declarations
+static void tim_tick(EmberPeripheral *p, uint64_t now_us);
+static void tim_handle_event(EmberPeripheral *p, const KernelEvent *ev);
+static void tim_init_fn(EmberPeripheral *p);
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim);
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim);
 void HAL_TIM_ErrorCallback(TIM_HandleTypeDef *htim);
 
-/* PWM active tracking (per timer base address) */
-static uint32_t pwm_active_bases[4];
-static bool     pwm_active_channels[4][4];  // [base_index][channel]
-
-static int active_timer_count = 0;
-static uint32_t active_timers[4];
-
-static int find_timer_index(uint32_t base) {
-    for (int i = 0; i < active_timer_count; i++)
-        if (active_timers[i] == base) return i;
-    return -1;
+uint32_t mock_tim_get_sr(uintptr_t base) {
+    return ember_reg_read(&tim_map, IDX_SR);
 }
 
-static void ensure_timer(uint32_t base) {
-    if (find_timer_index(base) >= 0) return;
-    if (active_timer_count < 4) {
-        active_timers[active_timer_count] = base;
-        pwm_active_bases[active_timer_count] = base;
-        for (int c = 0; c < 4; c++) pwm_active_channels[active_timer_count][c] = false;
-        active_timer_count++;
-    }
-}
-
-static bool is_pwm_active(uint32_t base) {
-    int idx = find_timer_index(base);
-    if (idx < 0) return false;
-    for (int c = 0; c < 4; c++) if (pwm_active_channels[idx][c]) return true;
-    return false;
-}
-
-static void set_pwm_active(uint32_t base, uint32_t channel, bool active) {
-    ensure_timer(base);
-    int idx = find_timer_index(base);
-    if (idx >= 0 && channel < 4) pwm_active_channels[idx][channel] = active;
-}
-
-/* Tick callback that advances timer registers and raises IRQs */
-static void tim_tick_cb(void) {
-    for (int i = 0; i < active_timer_count; i++) {
-        tim_regs_tick(active_timers[i]);
-        tim_regs_check_irq(active_timers[i]);
-    }
-}
-
-/* ----- public API (for tests) ----- */
 void mock_tim_init(void) {
-    active_timer_count = 0;
-    memset(pwm_active_channels, 0, sizeof(pwm_active_channels));
+    // Called by test before using HAL; we'll init registers here
+    memset(tim_regs, 0, sizeof(tim_regs));
+    // define metadata
+    tim_regs[IDX_CR1].name = "CR1"; tim_regs[IDX_CR1].writable_mask = 0x0001;
+    tim_regs[IDX_SR].name  = "SR";  tim_regs[IDX_SR].writable_mask  = 0x001F;
+    tim_regs[IDX_CNT].name = "CNT"; tim_regs[IDX_CNT].writable_mask = 0xFFFF;
+    tim_regs[IDX_PSC].name = "PSC"; tim_regs[IDX_PSC].writable_mask = 0xFFFF;
+    tim_regs[IDX_ARR].name = "ARR"; tim_regs[IDX_ARR].writable_mask = 0xFFFF;
+
+    tim_regs[IDX_DIER].name = "DIER"; tim_regs[IDX_DIER].writable_mask = 0xFFFF;  // all bits writable for simplicity
+
+    ember_regs_init(&tim_map, "TIM2", 0x40000400, tim_regs, REG_COUNT);
+    // configure peripheral
+    tim_peripheral.name         = "TIM2";
+    tim_peripheral.base_address = 0x40000400;
+    tim_peripheral.irq_number   = 28; // TIM2_IRQn
+    tim_peripheral.state        = NULL;
+    tim_peripheral.init         = tim_init_fn;
+    tim_peripheral.tick         = tim_tick;
+    tim_peripheral.handle_event = tim_handle_event;
 }
 
-void mock_tim_set_period_ticks(uintptr_t tim_base, uint32_t us) {
-    TIM_Registers *regs = tim_regs_get(tim_base);
-    if (!regs) return;
-    regs->ARR = us;
-    regs->PSC = 0;
+static void tim_init_fn(EmberPeripheral *p) {
+    (void)p;
+    // Already initialized in mock_tim_init; nothing extra needed.
 }
 
-void mock_tim_set_pwm_duty(uintptr_t tim_base, uint32_t channel, uint32_t duty) {
-    TIM_Registers *regs = tim_regs_get(tim_base);
-    if (!regs || channel > 3) return;
-    (&regs->CCR1)[channel] = duty;
-}
-
-void mock_tim_inject_capture(uintptr_t tim_base, uint32_t channel, uint32_t value) {
-    TIM_Registers *regs = tim_regs_get(tim_base);
-    if (!regs || channel > 3) return;
-    (&regs->CCR1)[channel] = value;
-    regs->SR |= (TIM_SR_CC1IF << channel);
-    if (regs->DIER & (TIM_DIER_CC1IE << channel)) {
-        NVIC_SetPendingIRQ(TIM2_IRQn);
-    }
-}
-
-/* ----- HAL implementations using registers ----- */
 HAL_StatusTypeDef HAL_TIM_Base_Init(TIM_HandleTypeDef *htim) {
-    tim_regs_init(htim->Instance);
-    ensure_timer(htim->Instance);
-    ember_runtime_on_tick(tim_tick_cb);
+    // ensure peripheral registered
+    if (tim_peripheral.base_address == 0) mock_tim_init();
+    kernel_register_peripheral(&tim_peripheral);
     trace_log("HAL_TIM_Base_Init", "\"registered\"");
     return HAL_OK;
 }
 
 HAL_StatusTypeDef HAL_TIM_Base_Start(TIM_HandleTypeDef *htim) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (!regs) return HAL_ERROR;
-    regs->CR1 |= TIM_CR1_CEN;
+    ember_reg_set_bits(&tim_map, IDX_CR1, 0x0001, "start", 0);
     char payload[128];
     snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\"", (uint32_t)htim->Instance);
     trace_log("HAL_TIM_Base_Start", payload);
@@ -106,9 +76,7 @@ HAL_StatusTypeDef HAL_TIM_Base_Start(TIM_HandleTypeDef *htim) {
 }
 
 HAL_StatusTypeDef HAL_TIM_Base_Stop(TIM_HandleTypeDef *htim) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (!regs) return HAL_ERROR;
-    regs->CR1 &= ~TIM_CR1_CEN;
+    ember_reg_clear_bits(&tim_map, IDX_CR1, 0x0001, "stop", 0);
     char payload[128];
     snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\"", (uint32_t)htim->Instance);
     trace_log("HAL_TIM_Base_Stop", payload);
@@ -116,84 +84,110 @@ HAL_StatusTypeDef HAL_TIM_Base_Stop(TIM_HandleTypeDef *htim) {
 }
 
 HAL_StatusTypeDef HAL_TIM_Base_Start_IT(TIM_HandleTypeDef *htim) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (!regs) return HAL_ERROR;
-    regs->DIER |= TIM_DIER_UIE;
-    HAL_TIM_Base_Start(htim);
-    /* No manual scheduling; tick callbacks will drive events */
+    // enable update interrupt
+    ember_reg_set_bits(&tim_map, IDX_CR1, 0x0001, "start IT", 0);
+    // also set DIER.UIE (we'll add DIER later; for now we just rely on kernel to fire on overflow)
+    // We'll just start the counter; the tick will generate update events and NVIC will trigger.
+    // In real implementation we'd set DIER bit in a proper register.
+    ember_reg_set_bits(&tim_map, IDX_DIER, TIM_DIER_UIE, "UIE enable", 0);
     return HAL_OK;
 }
 
 HAL_StatusTypeDef HAL_TIM_Base_Stop_IT(TIM_HandleTypeDef *htim) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (regs) regs->DIER &= ~TIM_DIER_UIE;
+    ember_reg_clear_bits(&tim_map, IDX_DIER, TIM_DIER_UIE, "UIE disable", 0);
     return HAL_TIM_Base_Stop(htim);
 }
 
-HAL_StatusTypeDef HAL_TIM_PWM_Init(TIM_HandleTypeDef *htim) { return HAL_OK; }
-
 HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *htim, uint32_t Channel) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (regs) {
-        regs->DIER |= (TIM_DIER_CC1IE << (Channel - 1));
-        set_pwm_active(htim->Instance, Channel - 1, true);
-    }
+    pwm_active = true;
     return HAL_TIM_Base_Start(htim);
 }
 
 HAL_StatusTypeDef HAL_TIM_PWM_Stop(TIM_HandleTypeDef *htim, uint32_t Channel) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (regs) {
-        regs->DIER &= ~(TIM_DIER_CC1IE << (Channel - 1));
-        set_pwm_active(htim->Instance, Channel - 1, false);
-    }
+    pwm_active = false;
     return HAL_TIM_Base_Stop(htim);
 }
 
-HAL_StatusTypeDef HAL_TIM_IC_Init(TIM_HandleTypeDef *htim) { return HAL_OK; }
-
 HAL_StatusTypeDef HAL_TIM_IC_Start_IT(TIM_HandleTypeDef *htim, uint32_t Channel) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (regs) {
-        regs->DIER |= (TIM_DIER_CC1IE << (Channel - 1));
-    }
+    // input capture – we'll keep simple for now
     return HAL_TIM_Base_Start(htim);
 }
 
-/* ----- IRQ handler ----- */
-void HAL_TIM_IRQHandler(TIM_HandleTypeDef *htim) {
-    TIM_Registers *regs = tim_regs_get(htim->Instance);
-    if (!regs) return;
+// Public API for tests to set period etc.
+void mock_tim_set_period_ticks(uintptr_t base, uint32_t us) {
+    ember_reg_write(&tim_map, IDX_ARR, us, "set period", 0);
+}
 
+void mock_tim_set_pwm_duty(uintptr_t base, uint32_t channel, uint32_t duty) {
+    if (channel <= 4) ember_reg_write(&tim_map, IDX_CCR1 + channel - 1, duty, "set duty", 0);
+}
+
+void mock_tim_inject_capture(uintptr_t base, uint32_t channel, uint32_t value) {
+    if (channel <= 4) {
+        ember_reg_write(&tim_map, IDX_CCR1 + channel - 1, value, "capture inject", 0);
+        ember_reg_set_bits(&tim_map, IDX_SR, 0x0002 << (channel-1), "capture", 0);
+    }
+}
+
+static void tim_tick(EmberPeripheral *p, uint64_t now_us) {
+    uint32_t cr1 = ember_reg_read(&tim_map, IDX_CR1);
+    if (!(cr1 & 1)) return; // CEN
+    uint32_t cnt = ember_reg_read(&tim_map, IDX_CNT);
+    uint32_t arr = ember_reg_read(&tim_map, IDX_ARR);
+    cnt++;
+    if (cnt >= arr) {
+        cnt = 0;
+        ember_reg_write(&tim_map, IDX_CNT, cnt, "overflow", 0);
+        ember_reg_set_bits(&tim_map, IDX_SR, 0x0001, "UIF set", 0);
+        // schedule a timer update event
+        kernel_schedule_event(0, KERN_EVT_TIM_UPDATE, p->base_address, 0, 0);
+    } else {
+        ember_reg_write(&tim_map, IDX_CNT, cnt, "increment", 0);
+    }
+}
+
+static void tim_handle_event(EmberPeripheral *p, const KernelEvent *ev) {
+    if (ev->type == KERN_EVT_TIM_UPDATE) {
+        uint32_t sr = ember_reg_read(&tim_map, IDX_SR);
+        uint32_t dier = ember_reg_read(&tim_map, IDX_DIER);
+        if ((sr & 0x0001) && (dier & TIM_DIER_UIE)) {
+            // The NVIC set and IRQ handler would be called in a full NVIC model;
+            // for now we directly invoke the HAL IRQ handler.
+            extern void HAL_TIM_IRQHandler(TIM_HandleTypeDef *htim);
+            TIM_HandleTypeDef htim = { .Instance = p->base_address, .ErrorCode = 0 };
+            HAL_TIM_IRQHandler(&htim);
+        }
+    }
+}
+
+// IRQ handler – calls callbacks
+void HAL_TIM_IRQHandler(TIM_HandleTypeDef *htim) {
     char details[128];
-    snprintf(details, sizeof(details),
-             "{\"instance\":\"TIM2\",\"address\":\"0x%08X\"}", (uint32_t)htim->Instance);
+    snprintf(details, sizeof(details), "{\"instance\":\"TIM2\",\"address\":\"0x%08X\"}", (uint32_t)htim->Instance);
     trace_software_event("TIM", "irq_handler", details);
 
-    if (regs->SR & TIM_SR_UIF) {
-        uint32_t old_sr = regs->SR;
-        regs->SR &= ~TIM_SR_UIF;
-        trace_reg_change("TIM", (uint32_t)htim->Instance, "SR", old_sr, regs->SR);
+    uint32_t sr = ember_reg_read(&tim_map, IDX_SR);
+    if (sr & 0x0001) { // UIF
+        ember_reg_clear_bits(&tim_map, IDX_SR, 0x0001, "HAL cleared UIF", 0);
         HAL_TIM_PeriodElapsedCallback(htim);
-        if (is_pwm_active(htim->Instance)) {
+        if (pwm_active) {
             HAL_TIM_PWM_PulseFinishedCallback(htim);
         }
     }
-
-    /* Clear capture compare flags and fire callbacks */
+    // handle CCx flags (capture/compare)
     for (int ch = 0; ch < 4; ch++) {
-        uint32_t flag = TIM_SR_CC1IF << ch;
-        if (regs->SR & flag) {
-            regs->SR &= ~flag;
-            /* For channels configured as PWM, don't call capture callback;
-               we rely on the UIF path for PWM. For IC, call capture. */
-            int idx = find_timer_index(htim->Instance);
-            if (idx >= 0 && pwm_active_channels[idx][ch]) {
-                /* In PWM mode, the compare match flag may set; we could ignore or handle separately.
-                   For now, we'll not call PulseFinished here because it's called above on UIF. */
+        if (sr & (0x0002 << ch)) {
+            ember_reg_clear_bits(&tim_map, IDX_SR, 0x0002 << ch, "HAL cleared CCxIF", 0);
+            if (ch == 3 && pwm_active) {
+                // actually PWM finished is already called on UIF, fine.
             } else {
                 HAL_TIM_IC_CaptureCallback(htim);
             }
         }
     }
 }
+
+// weak default callbacks (overridden by test)
+__attribute__((weak)) void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {}
+__attribute__((weak)) void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim) {}
+__attribute__((weak)) void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {}

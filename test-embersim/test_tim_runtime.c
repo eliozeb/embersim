@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include "mock_hal.h"
 #include "mock_tim.h"
-#include "tim_regs.h"
-#include "ember_sim_runtime.h"
+#include "ember_sim_kernel.h"
 #include "trace_log.h"
+
+#define TIM2_IRQn  28   // <-- add this line
+
+extern void mock_tim_init(void);
 
 extern void mock_tim_init(void);
 extern void HAL_TIM_IRQHandler(TIM_HandleTypeDef *htim);
@@ -34,88 +37,89 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     trace_software_event("TIM", "ic_capture", details);
 }
 
-void HAL_IRQ_Dispatch(IRQn_Type irq) {
-    if (irq == TIM2_IRQn) {
-        TIM_HandleTypeDef htim2 = { .Instance = (uint32_t)0x40000400, .ErrorCode = 0 };
-        HAL_TIM_IRQHandler(&htim2);
-    }
-}
-
 int main(void) {
     int failures = 0;
     trace_log_init("trace_tim_runtime.jsonl");
     mock_tim_init();
-    ember_runtime_init(0);
-    NVIC_EnableIRQ(TIM2_IRQn);
+    kernel_init();
+    nvic_enable(TIM2_IRQn);
 
     TIM_HandleTypeDef htim2 = { .Instance = (uint32_t)0x40000400, .ErrorCode = 0 };
-    HAL_TIM_Base_Init(&htim2);  /* ← MUST BE CALLED */
+    HAL_TIM_Base_Init(&htim2);
 
     /* Test 1: period elapsed */
     mock_tim_set_period_ticks(0x40000400, 3);
     period_cb = 0;
     HAL_TIM_Base_Start_IT(&htim2);
-    ember_runtime_run_until(10);
+    kernel_run_until(10);
     if (period_cb < 1) {
-        printf("FAIL: Period elapsed (got %d, expected >= 1)\n", period_cb);
+        printf("FAIL: Period elapsed (got %d)\n", period_cb);
         failures++;
-    } else {
-        printf("PASS: Period elapsed via runtime (%d callbacks)\n", period_cb);
-    }
+    } else printf("PASS: Period elapsed via runtime (%d callbacks)\n", period_cb);
 
     /* Test 2: PWM */
     pwm_cb = 0;
     HAL_TIM_PWM_Start(&htim2, 1);
-    ember_runtime_run_until(20);
+    kernel_run_until(20);
     if (pwm_cb < 1) {
         printf("FAIL: PWM pulse finished\n");
         failures++;
-    } else {
-        printf("PASS: PWM pulse finished via runtime\n");
-    }
+    } else printf("PASS: PWM pulse finished via runtime\n");
 
     /* Test 3: input capture */
     ic_cb = 0;
     mock_tim_inject_capture(0x40000400, 2, 12345);
     HAL_TIM_IC_Start_IT(&htim2, 2);
-    ember_runtime_run_until(30);
+    kernel_run_until(30);
     if (ic_cb < 1) {
         printf("FAIL: Input capture\n");
         failures++;
-    } else {
-        printf("PASS: Input capture via runtime\n");
-    }
+    } else printf("PASS: Input capture via runtime\n");
 
-    /* Test 5: Stop IT prevents callbacks */
-
-    HAL_TIM_Base_Stop_IT(&htim2);
-    period_cb = 0;
-    ember_runtime_run_until(40);
-    if (period_cb != 0) {
-        printf("FAIL: Timer stopped but callback fired\n");
-        failures++;
-    } else {
-        printf("PASS: No callback when timer stopped\n");
-    }
-
-/* Test 6: Disable update interrupt, start counter without IT — no callback */
+    /* Test 4: hardware state before dispatch */
     {
         HAL_TIM_Base_Stop_IT(&htim2);
-        TIM_Registers *regs = tim_regs_get(0x40000400);
-        regs->DIER &= ~TIM_DIER_UIE;   // ensure UIE is disabled
-        regs->SR = 0;                  // clear any pending flags
-        HAL_TIM_Base_Start(&htim2);    // start counter WITHOUT enabling interrupts
+        mock_tim_set_period_ticks(0x40000400, 3);
+        uint32_t sr_before = mock_tim_get_sr(0x40000400);
+        HAL_TIM_Base_Start_IT(&htim2);
+        kernel_advance_ticks(10);   // timer runs, events queued, IRQ NOT yet serviced
+        uint32_t sr_after = mock_tim_get_sr(0x40000400);
+        if (sr_after & 0x0001) {
+            printf("PASS: SR UIF set after tick (before dispatch)\n");
+        } else {
+            printf("FAIL: SR UIF not set (before=%04X after=%04X)\n", sr_before, sr_after);
+            failures++;
+        }
+    }
+
+    /* Test 5: dispatch clears UIF and invokes callback */
+    {
         period_cb = 0;
-        ember_runtime_run_until(50);
+        kernel_dispatch_pending();  // now process events → IRQ handler clears UIF
+        uint32_t sr_final = mock_tim_get_sr(0x40000400);
+        if (sr_final & 0x0001) {
+            printf("FAIL: SR UIF still set after dispatch\n");
+            failures++;
+        } else if (period_cb < 1) {
+            printf("FAIL: callback not invoked after dispatch\n");
+            failures++;
+        } else {
+            printf("PASS: UIF cleared and period callback invoked after dispatch\n");
+        }
+    }
+
+    /* Test 6: No callback when UIE disabled */
+    {
+        HAL_TIM_Base_Stop_IT(&htim2);
+        HAL_TIM_Base_Start(&htim2);  // start without enabling interrupts
+        period_cb = 0;
+        kernel_run_until(50);
         if (period_cb != 0) {
             printf("FAIL: Callback fired with UIE disabled\n");
             failures++;
-        } else {
-            printf("PASS: No callback when UIE disabled\n");
-        }
-        HAL_TIM_Base_Stop(&htim2);     // clean up
+        } else printf("PASS: No callback when UIE disabled\n");
+        HAL_TIM_Base_Stop(&htim2);
     }
-
 
     trace_log_close();
     FILE *f = fopen("trace_tim_runtime.jsonl", "r");

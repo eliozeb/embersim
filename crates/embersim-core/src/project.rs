@@ -14,21 +14,24 @@ pub fn initialize(
 
     stubgen::generate(hal_functions, &output_dir.join("mocks"))?;
 
+    // Core runtime and register model
+    fs::write(output_dir.join("mocks/ember_sim_kernel.h"), crate::templates::EMBER_SIM_KERNEL_H)?;
+    fs::write(output_dir.join("mocks/ember_sim_kernel.c"), crate::templates::EMBER_SIM_KERNEL_C)?;
+    fs::write(output_dir.join("mocks/ember_regs.h"), crate::templates::EMBER_REGS_H)?;
+    fs::write(output_dir.join("mocks/ember_regs.c"), crate::templates::EMBER_REGS_C)?;
+
+    // Peripherals
     fs::write(output_dir.join("mocks/trace_log.h"), crate::templates::TRACE_LOG_H)?;
     fs::write(output_dir.join("mocks/trace_log.c"), crate::templates::TRACE_LOG_C)?;
     fs::write(output_dir.join("mocks/mock_state.c"), crate::templates::MOCK_STATE_C)?;
     fs::write(output_dir.join("mocks/mock_uart.c"), crate::templates::MOCK_UART_C)?;
     fs::write(output_dir.join("mocks/mock_i2c.c"), crate::templates::MOCK_I2C_C)?;
-    fs::write(output_dir.join("mocks/mock_spi.h"), crate::templates::MOCK_SPI_H)?;
     fs::write(output_dir.join("mocks/mock_spi.c"), crate::templates::MOCK_SPI_C)?;
-    fs::write(output_dir.join("mocks/mock_tim.h"), crate::templates::MOCK_TIM_H)?;
     fs::write(output_dir.join("mocks/mock_tim.c"), crate::templates::MOCK_TIM_C)?;
-    fs::write(output_dir.join("mocks/ember_sim_scheduler.h"), crate::templates::EMBER_SIM_SCHEDULER_H)?;
-    fs::write(output_dir.join("mocks/ember_sim_scheduler.c"), crate::templates::EMBER_SIM_SCHEDULER_C)?;
-    fs::write(output_dir.join("mocks/ember_sim_runtime.h"), crate::templates::EMBER_SIM_RUNTIME_H)?;
-    fs::write(output_dir.join("mocks/ember_sim_runtime.c"), crate::templates::EMBER_SIM_RUNTIME_C)?;
-    fs::write(output_dir.join("mocks/tim_regs.h"), crate::templates::TIM_REGS_H)?;
-    fs::write(output_dir.join("mocks/tim_regs.c"), crate::templates::TIM_REGS_C)?;
+    fs::write(output_dir.join("mocks/mock_tim.h"), crate::templates::MOCK_TIM_H)?;
+
+    fs::write(output_dir.join("mocks/mock_spi.h"), crate::templates::MOCK_SPI_H)?;
+
     fs::write(output_dir.join("host_main.c"), crate::templates::HOST_MAIN_C)?;
 
     eprintln!("EmberSim workspace initialized in: {}", output_dir.display());
