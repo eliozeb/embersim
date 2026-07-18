@@ -34,6 +34,9 @@ void trace_log(const char *func, const char *json_payload)
     else if (strncmp(func, "HAL_DMA", 7) == 0) peripheral = "DMA";
     else if (strncmp(func, "HAL_ADC", 7) == 0) peripheral = "ADC";
 
+    if (strncmp(func, "HARDWARE_EVENT", 14) == 0) peripheral = "runtime";
+    else if (strncmp(func, "SOFTWARE_EVENT", 14) == 0) peripheral = "runtime";
+
     fprintf(trace_file,
         "{\"ts_ms\":%u,\"peripheral\":\"%s\",\"func\":\"%s\",%s}\n",
         event_counter++, peripheral, func, json_payload);

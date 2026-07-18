@@ -10,3 +10,9 @@ pub const MOCK_SPI_C: &[u8] = include_bytes!("templates/mock_spi.c");
 
 pub const MOCK_TIM_H: &[u8] = include_bytes!("templates/mock_tim.h");
 pub const MOCK_TIM_C: &[u8] = include_bytes!("templates/mock_tim.c");
+
+pub const EMBER_SIM_SCHEDULER_H: &[u8] = include_bytes!("templates/ember_sim_scheduler.h");
+pub const EMBER_SIM_SCHEDULER_C: &[u8] = include_bytes!("templates/ember_sim_scheduler.c");
+
+pub const EMBER_SIM_RUNTIME_H: &[u8] = include_bytes!("templates/ember_sim_runtime.h");
+pub const EMBER_SIM_RUNTIME_C: &[u8] = include_bytes!("templates/ember_sim_runtime.c");
