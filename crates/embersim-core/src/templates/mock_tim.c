@@ -171,9 +171,10 @@ void HAL_TIM_IRQHandler(TIM_HandleTypeDef *htim) {
     trace_software_event("TIM", "irq_handler", details);
 
     if (regs->SR & TIM_SR_UIF) {
+        uint32_t old_sr = regs->SR;
         regs->SR &= ~TIM_SR_UIF;
+        trace_reg_change("TIM", (uint32_t)htim->Instance, "SR", old_sr, regs->SR);
         HAL_TIM_PeriodElapsedCallback(htim);
-        /* Fire PWM pulse finished if any PWM channel is active */
         if (is_pwm_active(htim->Instance)) {
             HAL_TIM_PWM_PulseFinishedCallback(htim);
         }

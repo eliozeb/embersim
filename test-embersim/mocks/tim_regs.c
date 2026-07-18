@@ -77,9 +77,11 @@ void tim_regs_tick(uint32_t base_address) {
 
         /* Update (overflow) */
         if (regs->CNT >= arr) {
-            regs->CNT = 0;   /* reset */
+            uint32_t old_sr = regs->SR;
+            regs->CNT = 0;
             regs->SR |= TIM_SR_UIF;
             tim_instances[idx].has_updated = true;
+            trace_reg_change("TIM", base_address, "SR", old_sr, regs->SR);
         }
     }
 }

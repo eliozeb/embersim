@@ -86,6 +86,37 @@ int main(void) {
         printf("PASS: Input capture via runtime\n");
     }
 
+    /* Test 5: Stop IT prevents callbacks */
+
+    HAL_TIM_Base_Stop_IT(&htim2);
+    period_cb = 0;
+    ember_runtime_run_until(40);
+    if (period_cb != 0) {
+        printf("FAIL: Timer stopped but callback fired\n");
+        failures++;
+    } else {
+        printf("PASS: No callback when timer stopped\n");
+    }
+
+/* Test 6: Disable update interrupt, start counter without IT — no callback */
+    {
+        HAL_TIM_Base_Stop_IT(&htim2);
+        TIM_Registers *regs = tim_regs_get(0x40000400);
+        regs->DIER &= ~TIM_DIER_UIE;   // ensure UIE is disabled
+        regs->SR = 0;                  // clear any pending flags
+        HAL_TIM_Base_Start(&htim2);    // start counter WITHOUT enabling interrupts
+        period_cb = 0;
+        ember_runtime_run_until(50);
+        if (period_cb != 0) {
+            printf("FAIL: Callback fired with UIE disabled\n");
+            failures++;
+        } else {
+            printf("PASS: No callback when UIE disabled\n");
+        }
+        HAL_TIM_Base_Stop(&htim2);     // clean up
+    }
+
+
     trace_log_close();
     FILE *f = fopen("trace_tim_runtime.jsonl", "r");
     if (f) {

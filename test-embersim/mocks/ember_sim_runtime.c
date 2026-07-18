@@ -14,6 +14,12 @@ static NVIC_Channel nvic_channels[MAX_IRQS];
 static EmberTickCallback tick_callbacks[8];
 static int tick_cb_count = 0;
 
+// global parent sequence (set before IRQ handler chain)
+static uint32_t g_parent_seq = 0;
+
+void ember_runtime_set_parent_seq(uint32_t seq) { g_parent_seq = seq; }
+uint32_t ember_runtime_get_parent_seq(void) { return g_parent_seq; }
+
 /* ---------- trace helpers ---------- */
 void trace_hardware_event(const char *component, const char *event, const char *details_json) {
     char payload[512];
@@ -25,9 +31,15 @@ void trace_hardware_event(const char *component, const char *event, const char *
 
 void trace_software_event(const char *component, const char *event, const char *details_json) {
     char payload[512];
-    snprintf(payload, sizeof(payload),
-             "\"origin\":\"software\",\"component\":\"%s\",\"event\":\"%s\",\"details\":%s",
-             component, event, details_json ? details_json : "{}");
+    if (g_parent_seq > 0) {
+        snprintf(payload, sizeof(payload),
+                 "\"origin\":\"software\",\"component\":\"%s\",\"event\":\"%s\",\"parent\":%u,\"depth\":1,\"details\":%s",
+                 component, event, g_parent_seq, details_json ? details_json : "{}");
+    } else {
+        snprintf(payload, sizeof(payload),
+                 "\"origin\":\"software\",\"component\":\"%s\",\"event\":\"%s\",\"details\":%s",
+                 component, event, details_json ? details_json : "{}");
+    }
     trace_log("SOFTWARE_EVENT", payload);
 }
 
@@ -122,7 +134,7 @@ bool ember_runtime_step(void) {
         default: break;
     }
     free(ev);
-
+    g_parent_seq = ev->seq;
     /* 5. Dispatch all pending IRQs */
     int irq;
     while ((irq = highest_pending_irq()) >= 0) {
@@ -134,6 +146,9 @@ bool ember_runtime_step(void) {
         HAL_IRQ_Dispatch((IRQn_Type)irq);
         nvic_channels[irq].active = false;
     }
+    // after the IRQ dispatch loop
+    g_parent_seq = 0;
+
     return true;
 }
 
