@@ -27,6 +27,8 @@ pub fn initialize(
     fs::write(output_dir.join("mocks/ember_sim_scheduler.c"), crate::templates::EMBER_SIM_SCHEDULER_C)?;
     fs::write(output_dir.join("mocks/ember_sim_runtime.h"), crate::templates::EMBER_SIM_RUNTIME_H)?;
     fs::write(output_dir.join("mocks/ember_sim_runtime.c"), crate::templates::EMBER_SIM_RUNTIME_C)?;
+    fs::write(output_dir.join("mocks/tim_regs.h"), crate::templates::TIM_REGS_H)?;
+    fs::write(output_dir.join("mocks/tim_regs.c"), crate::templates::TIM_REGS_C)?;
     fs::write(output_dir.join("host_main.c"), crate::templates::HOST_MAIN_C)?;
 
     eprintln!("EmberSim workspace initialized in: {}", output_dir.display());

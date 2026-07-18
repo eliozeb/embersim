@@ -16,3 +16,6 @@ pub const EMBER_SIM_SCHEDULER_C: &[u8] = include_bytes!("templates/ember_sim_sch
 
 pub const EMBER_SIM_RUNTIME_H: &[u8] = include_bytes!("templates/ember_sim_runtime.h");
 pub const EMBER_SIM_RUNTIME_C: &[u8] = include_bytes!("templates/ember_sim_runtime.c");
+
+pub const TIM_REGS_H: &[u8] = include_bytes!("templates/tim_regs.h");
+pub const TIM_REGS_C: &[u8] = include_bytes!("templates/tim_regs.c");

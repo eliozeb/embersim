@@ -39,6 +39,9 @@ typedef struct EmberPeripheral {
     void (*handle_irq)(void *handle);
 } EmberPeripheral;
 
+typedef void (*EmberTickCallback)(void);
+void ember_runtime_on_tick(EmberTickCallback cb);
+
 void ember_runtime_register_peripheral(EmberPeripheral *p);
 void ember_runtime_register_irq(uint32_t base_address, IRQn_Type irq);
 
