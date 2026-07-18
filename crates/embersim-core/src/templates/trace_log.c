@@ -39,6 +39,7 @@ void trace_log(const char *func, const char *json_payload)
     else if (strncmp(func, "SOFTWARE_EVENT", 14) == 0) peripheral = "runtime";
     else if (strncmp(func, "REGISTER_EVENT", 14) == 0) peripheral = "runtime";
     else if (strncmp(func, "NVIC_DISPATCH", 13) == 0) peripheral = "runtime";
+    else if (strncmp(func, "HAL_UART", 8) == 0) peripheral = "UART";
 
     fprintf(trace_file,
         "{\"ts_ms\":%u,\"peripheral\":\"%s\",\"func\":\"%s\",%s}\n",

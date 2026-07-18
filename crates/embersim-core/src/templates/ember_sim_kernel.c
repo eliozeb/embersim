@@ -262,6 +262,7 @@ void ember_bus_dispatch_all(void) {
 static uint32_t periph_to_irq(uint32_t base) {
     switch (base) {
         case 0x40000400: return 28; // TIM2
+        case 0x40004400: return 38; // USART2
         default:         return 0;
     }
 }
@@ -320,6 +321,20 @@ static void trace_bus_handler(const BusEvent *ev) {
                      ev->data.reg.new_value,
                      ev->data.reg.reason);
             trace_log("REGISTER_EVENT", payload);
+            break;
+        }
+        case BUS_EVT_UART_TX_DONE: {
+            char details[128];
+            snprintf(details, sizeof(details),
+                     "{\"layer\":\"hardware\",\"uart\":\"%08x\",\"event\":\"tx_done\"}", ev->source);
+            trace_log("HARDWARE_EVENT", details);
+            break;
+        }
+        case BUS_EVT_UART_RX_DONE: {
+            char details[128];
+            snprintf(details, sizeof(details),
+                     "{\"layer\":\"hardware\",\"uart\":\"%08x\",\"event\":\"rx_done\"}", ev->source);
+            trace_log("HARDWARE_EVENT", details);
             break;
         }
         default: break;

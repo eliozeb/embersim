@@ -1,241 +1,189 @@
-/* mock_uart.c — Professional UART mock with tick-driven async completion */
+/* mock_uart.c — UART peripheral using the simulation kernel and register model */
 #include "mock_hal.h"
+#include "ember_regs.h"
+#include "ember_sim_kernel.h"
 #include "trace_log.h"
 #include <string.h>
 #include <stdio.h>
 
-/* Forward declarations for HAL callbacks (weak defaults defined later) */
+/* Forward declarations for callbacks */
+void HAL_UART_IRQHandler(UART_HandleTypeDef *huart);
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart);
 
-/* -----------------------------------------------
-   Internal state storage
-   ----------------------------------------------- */
-#define UART_MAX_INSTANCES  4
-#define UART_BUF_SIZE       256
+/* Private peripheral functions */
+static void uart_tick(EmberPeripheral *p, uint64_t now_us);
+static void uart_init_fn(EmberPeripheral *p);
+static void uart_irq_handler(void);
 
-typedef struct {
-    uint8_t tx_buf[UART_BUF_SIZE];
-    uint16_t tx_len;
-    uint8_t rx_buf[UART_BUF_SIZE];
-    uint16_t rx_len, rx_pos;
+/* Register indices */
+enum {
+    UART_SR, UART_DR, UART_CR1, UART_BRR,
+    UART_REG_COUNT
+};
 
-    struct {
-        int enabled;
-        uint32_t flags;         // HAL_UART_ERROR_xxx
-        uint16_t trigger_after;
-    } error_inject;
+/* Bit definitions (simplified) */
+#define UART_SR_TXE   (1 << 7)
+#define UART_SR_RXNE  (1 << 5)
+#define UART_SR_TC    (1 << 6)
 
-    int tx_mode;  /* 0=none, 1=blocking, 2=IT, 3=DMA */
-    int rx_mode;
-    uint32_t tx_end_tick;
-    uint32_t rx_end_tick;
-    int tx_cplt_pending;
-    int rx_cplt_pending;
+#define UART_CR1_UE   (1 << 0)
+#define UART_CR1_TE   (1 << 3)
+#define UART_CR1_RE   (1 << 2)
+#define UART_CR1_TXEIE (1 << 7)
+#define UART_CR1_RXNEIE (1 << 5)
 
-    UART_HandleTypeDef *tx_huart;  // handle for TX callback
-    UART_HandleTypeDef *rx_huart;  // handle for RX callback
-} UartInstance;
+/* Internal state */
+static EmberRegister  uart_regs[UART_REG_COUNT];
+static EmberRegMap    uart_map;
+static EmberPeripheral uart_peripheral;
 
-static UartInstance uart_instances[UART_MAX_INSTANCES];
-static uint32_t s_current_tick = 0;
+static uint8_t  tx_buf[256];
+static uint16_t tx_len, tx_pos;
+static uint8_t  rx_buf[256];
+static uint16_t rx_len, rx_pos;
+static bool     tx_active = false;
+static uint32_t baud_div = 115200 / 1000000; // simplistic: bytes per us? We'll use a cycle count.
 
-static int uart_index(uintptr_t base) {
-    switch (base) {
-        case 0x40011000: return 0;
-        case 0x40004400: return 1;
-        case 0x40004800: return 2;
-        case 0x40004C00: return 3;
-        default: return 0;
-    }
-}
-
-/* ---------- Public control API ---------- */
+/* ----- Public API (for tests) ----- */
 void mock_uart_init(void) {
-    memset(uart_instances, 0, sizeof(uart_instances));
-    s_current_tick = 0;
+    memset(uart_regs, 0, sizeof(uart_regs));
+    uart_regs[UART_SR].name = "SR";   uart_regs[UART_SR].writable_mask = 0x0000; // read-only
+    uart_regs[UART_DR].name = "DR";   uart_regs[UART_DR].writable_mask = 0x00FF;
+    uart_regs[UART_CR1].name = "CR1"; uart_regs[UART_CR1].writable_mask = 0xFFFF;
+    uart_regs[UART_BRR].name = "BRR"; uart_regs[UART_BRR].writable_mask = 0xFFFF;
+    ember_regs_init(&uart_map, "USART2", 0x40004400, uart_regs, UART_REG_COUNT);
+
+    uart_peripheral.name         = "USART2";
+    uart_peripheral.base_address = 0x40004400;
+    uart_peripheral.irq_number   = 38; // USART2_IRQn
+    uart_peripheral.state        = NULL;
+    uart_peripheral.init         = uart_init_fn;
+    uart_peripheral.tick         = uart_tick;
+    uart_peripheral.handle_event = NULL;
+
+    tx_len = tx_pos = 0;
+    rx_len = rx_pos = 0;
+    tx_active = false;
 }
+
 void mock_uart_set_rx(uintptr_t base, const uint8_t *bytes, uint16_t len) {
-    int idx = uart_index(base);
-    if (len > UART_BUF_SIZE) len = UART_BUF_SIZE;
-    memcpy(uart_instances[idx].rx_buf, bytes, len);
-    uart_instances[idx].rx_len = len;
-    uart_instances[idx].rx_pos = 0;
+    (void)base;
+    memcpy(rx_buf, bytes, len);
+    rx_len = len;
+    rx_pos = 0;
 }
+
 const uint8_t *mock_uart_get_tx(uintptr_t base, uint16_t *len) {
-    int idx = uart_index(base);
-    *len = uart_instances[idx].tx_len;
-    return uart_instances[idx].tx_buf;
-}
-void mock_uart_inject_error(uintptr_t base, const char *error) {
-    int idx = uart_index(base);
-    uart_instances[idx].error_inject.enabled = 1;
-    if (strcmp(error, "PE") == 0) uart_instances[idx].error_inject.flags = 0x01;
-    else if (strcmp(error, "FE") == 0) uart_instances[idx].error_inject.flags = 0x02;
-    else if (strcmp(error, "NE") == 0) uart_instances[idx].error_inject.flags = 0x04;
-    else if (strcmp(error, "ORE") == 0) uart_instances[idx].error_inject.flags = 0x08;
+    (void)base;
+    *len = tx_len;
+    return tx_buf;
 }
 
-/* ---------- Tick function (must be called from host) ---------- */
-void ember_sim_uart_tick(void) {
-    s_current_tick++;
-    for (int i = 0; i < UART_MAX_INSTANCES; i++) {
-        UartInstance *u = &uart_instances[i];
-        if (u->tx_cplt_pending && s_current_tick >= u->tx_end_tick) {
-            u->tx_cplt_pending = 0;
-            u->tx_mode = 0;
-            if (u->tx_huart) {
-                HAL_UART_TxCpltCallback(u->tx_huart);
-            }
-        }
-        if (u->rx_cplt_pending && s_current_tick >= u->rx_end_tick) {
-            u->rx_cplt_pending = 0;
-            u->rx_mode = 0;
-            if (u->rx_huart) {
-                HAL_UART_RxCpltCallback(u->rx_huart);
-            }
-        }
-    }
-}
-
-/* ---------- HAL UART Implementations ---------- */
-
-HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef* huart, uint8_t* pData, uint16_t Size, uint32_t Timeout) {
-    (void)Timeout;
-    int idx = uart_index((uintptr_t)huart->Instance);
-    UartInstance *u = &uart_instances[idx];
-    if (Size > UART_BUF_SIZE) Size = UART_BUF_SIZE;
-    memcpy(u->tx_buf, pData, Size);
-    u->tx_len = Size;
-    u->tx_mode = 1; // BLOCKING
-    char hex[UART_BUF_SIZE*2+1];
-    for (int i=0; i<Size; i++) sprintf(hex+2*i, "%02X", pData[i]);
-    hex[2*Size] = '\0';
-    char payload[512];
-    snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\",\"data\":\"%s\",\"sz\":%u,\"mode\":\"BLOCK\"",
-             (uint32_t)huart->Instance, hex, Size);
-    trace_log("HAL_UART_Transmit", payload);
-    if (u->error_inject.enabled) {
-        huart->ErrorCode = u->error_inject.flags;
-        u->error_inject.enabled = 0;
-        HAL_UART_ErrorCallback(huart);
-        return HAL_ERROR;
-    }
+/* ----- HAL API functions ----- */
+HAL_StatusTypeDef HAL_UART_Init(UART_HandleTypeDef *huart) {
+    (void)huart;
+    kernel_register_peripheral(&uart_peripheral);
+    trace_log("HAL_UART_Init", "\"registered\"");
     return HAL_OK;
 }
 
-HAL_StatusTypeDef HAL_UART_Receive(UART_HandleTypeDef* huart, uint8_t* pData, uint16_t Size, uint32_t Timeout) {
+HAL_StatusTypeDef HAL_UART_Transmit(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout) {
     (void)Timeout;
-    int idx = uart_index((uintptr_t)huart->Instance);
-    UartInstance *u = &uart_instances[idx];
-    uint16_t available = u->rx_len - u->rx_pos;
-    char hex[UART_BUF_SIZE*2+1];
-    if (Size > available) {
-        memcpy(pData, u->rx_buf + u->rx_pos, available);
-        u->rx_pos += available;
-        for (int i=0; i<available; i++) sprintf(hex+2*i, "%02X", pData[i]);
-        hex[2*available] = '\0';
-        char payload[512];
-        snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\",\"data\":\"%s\",\"sz\":%u,\"requested\":%u,\"status\":\"TIMEOUT\"",
-                 (uint32_t)huart->Instance, hex, available, Size);
-        trace_log("HAL_UART_Receive", payload);
+    memcpy(tx_buf, pData, Size);
+    tx_len = Size;
+    tx_pos = 0;
+    tx_active = true;
+    trace_log("HAL_UART_Transmit", "\"started\"");
+    return HAL_OK;
+}
+
+HAL_StatusTypeDef HAL_UART_Receive(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size, uint32_t Timeout) {
+    (void)Timeout;
+    uint16_t avail = rx_len - rx_pos;
+    if (Size > avail) {
+        memcpy(pData, rx_buf + rx_pos, avail);
+        rx_pos = rx_len;
         return HAL_TIMEOUT;
     }
-    memcpy(pData, u->rx_buf + u->rx_pos, Size);
-    u->rx_pos += Size;
-    for (int i=0; i<Size; i++) sprintf(hex+2*i, "%02X", pData[i]);
-    hex[2*Size] = '\0';
-    char payload[512];
-    snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\",\"data\":\"%s\",\"sz\":%u",
-             (uint32_t)huart->Instance, hex, Size);
-    trace_log("HAL_UART_Receive", payload);
+    memcpy(pData, rx_buf + rx_pos, Size);
+    rx_pos += Size;
     return HAL_OK;
 }
 
-HAL_StatusTypeDef HAL_UART_Transmit_IT(UART_HandleTypeDef* huart, uint8_t* pData, uint16_t Size) {
-    int idx = uart_index((uintptr_t)huart->Instance);
-    UartInstance *u = &uart_instances[idx];
-    if (Size > UART_BUF_SIZE) Size = UART_BUF_SIZE;
-    memcpy(u->tx_buf, pData, Size);
-    u->tx_len = Size;
-    u->tx_mode = 2; // IT
-    u->tx_huart = huart;  // store handle for later callback
-    char hex[UART_BUF_SIZE*2+1];
-    for (int i=0; i<Size; i++) sprintf(hex+2*i, "%02X", pData[i]);
-    hex[2*Size] = '\0';
-    char payload[512];
-    snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\",\"data\":\"%s\",\"sz\":%u,\"mode\":\"IT\"",
-             (uint32_t)huart->Instance, hex, Size);
-    trace_log("HAL_UART_Transmit_IT", payload);
-    u->tx_cplt_pending = 1;
-    u->tx_end_tick = s_current_tick + 1;
+HAL_StatusTypeDef HAL_UART_Transmit_IT(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size) {
+    ember_reg_set_bits(&uart_map, UART_CR1, UART_CR1_TXEIE, "enable TXEIE", 0);
+    HAL_UART_Transmit(huart, pData, Size, 0);
     return HAL_OK;
 }
 
-HAL_StatusTypeDef HAL_UART_Receive_IT(UART_HandleTypeDef* huart, uint8_t* pData, uint16_t Size) {
-    int idx = uart_index((uintptr_t)huart->Instance);
-    UartInstance *u = &uart_instances[idx];
-    uint16_t available = u->rx_len - u->rx_pos;
-    if (Size > available) Size = available;
-    memcpy(pData, u->rx_buf + u->rx_pos, Size);
-    u->rx_pos += Size;
-    u->rx_mode = 2; // IT
-    u->rx_huart = huart;
-    char hex[UART_BUF_SIZE*2+1];
-    for (int i=0; i<Size; i++) sprintf(hex+2*i, "%02X", pData[i]);
-    hex[2*Size] = '\0';
-    char payload[512];
-    snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\",\"data\":\"%s\",\"sz\":%u,\"mode\":\"IT\"",
-             (uint32_t)huart->Instance, hex, Size);
-    trace_log("HAL_UART_Receive_IT", payload);
-    u->rx_cplt_pending = 1;
-    u->rx_end_tick = s_current_tick + 1;
+HAL_StatusTypeDef HAL_UART_Receive_IT(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size) {
+    ember_reg_set_bits(&uart_map, UART_CR1, UART_CR1_RXNEIE, "enable RXNEIE", 0);
+    // RX will be triggered by peripheral tick when bytes are injected
     return HAL_OK;
 }
 
-HAL_StatusTypeDef HAL_UART_Transmit_DMA(UART_HandleTypeDef* huart, uint8_t* pData, uint16_t Size) {
-    int idx = uart_index((uintptr_t)huart->Instance);
-    UartInstance *u = &uart_instances[idx];
-    if (Size > UART_BUF_SIZE) Size = UART_BUF_SIZE;
-    memcpy(u->tx_buf, pData, Size);
-    u->tx_len = Size;
-    u->tx_mode = 3; // DMA
-    u->tx_huart = huart;
-    char hex[UART_BUF_SIZE*2+1];
-    for (int i=0; i<Size; i++) sprintf(hex+2*i, "%02X", pData[i]);
-    hex[2*Size] = '\0';
-    char payload[512];
-    snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\",\"data\":\"%s\",\"sz\":%u,\"mode\":\"DMA\"",
-             (uint32_t)huart->Instance, hex, Size);
-    trace_log("HAL_UART_Transmit_DMA", payload);
-    u->tx_cplt_pending = 1;
-    u->tx_end_tick = s_current_tick; // immediate
-    return HAL_OK;
+/* ----- Peripheral callbacks ----- */
+static void uart_tick(EmberPeripheral *p, uint64_t now_us) {
+    (void)now_us;
+
+    /* Transmit: after each tick, we simulate one byte sent */
+    if (tx_active && (tx_pos < tx_len)) {
+        tx_pos++;
+        if (tx_pos >= tx_len) {
+            tx_active = false;
+            // Set TXE and TC flags
+            ember_reg_set_bits(&uart_map, UART_SR, UART_SR_TXE | UART_SR_TC, "TX complete", 0);
+            // Publish event if interrupt enabled
+            uint32_t cr1 = ember_reg_read(&uart_map, UART_CR1);
+            if (cr1 & UART_CR1_TXEIE) {
+                ember_bus_publish(BUS_EVT_UART_TX_DONE, p->base_address, 0, NULL);
+            }
+        }
+    }
+
+    /* Receive: if bytes available in rx_buf, set RXNE */
+    if (rx_pos < rx_len) {
+        ember_reg_set_bits(&uart_map, UART_SR, UART_SR_RXNE, "RX byte ready", 0);
+        uint32_t cr1 = ember_reg_read(&uart_map, UART_CR1);
+        if (cr1 & UART_CR1_RXNEIE) {
+            ember_bus_publish(BUS_EVT_UART_RX_DONE, p->base_address, 0, NULL);
+        }
+    }
 }
 
-HAL_StatusTypeDef HAL_UART_Receive_DMA(UART_HandleTypeDef* huart, uint8_t* pData, uint16_t Size) {
-    int idx = uart_index((uintptr_t)huart->Instance);
-    UartInstance *u = &uart_instances[idx];
-    uint16_t available = u->rx_len - u->rx_pos;
-    if (Size > available) Size = available;
-    memcpy(pData, u->rx_buf + u->rx_pos, Size);
-    u->rx_pos += Size;
-    u->rx_mode = 3; // DMA
-    u->rx_huart = huart;
-    char hex[UART_BUF_SIZE*2+1];
-    for (int i=0; i<Size; i++) sprintf(hex+2*i, "%02X", pData[i]);
-    hex[2*Size] = '\0';
-    char payload[512];
-    snprintf(payload, sizeof(payload), "\"inst\":\"0x%08X\",\"data\":\"%s\",\"sz\":%u,\"mode\":\"DMA\"",
-             (uint32_t)huart->Instance, hex, Size);
-    trace_log("HAL_UART_Receive_DMA", payload);
-    u->rx_cplt_pending = 1;
-    u->rx_end_tick = s_current_tick;
-    return HAL_OK;
+static void uart_init_fn(EmberPeripheral *p) {
+    (void)p;
+    nvic_register_handler(38, uart_irq_handler);
 }
 
-/* Default weak callbacks (overridden by user) */
-__attribute__((weak)) void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {}
-__attribute__((weak)) void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {}
-__attribute__((weak)) void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {}
+static void uart_irq_handler(void) {
+    UART_HandleTypeDef huart = { .Instance = 0x40004400, .ErrorCode = 0 };
+    HAL_UART_IRQHandler(&huart);
+}
+
+/* ----- HAL IRQ Handler (called via NVIC dispatcher) ----- */
+void HAL_UART_IRQHandler(UART_HandleTypeDef *huart) {
+    uint32_t sr = ember_reg_read(&uart_map, UART_SR);
+    uint32_t cr1 = ember_reg_read(&uart_map, UART_CR1);
+
+    if ((sr & UART_SR_TXE) && (cr1 & UART_CR1_TXEIE)) {
+        ember_reg_clear_bits(&uart_map, UART_SR, UART_SR_TXE, "clear TXE", 0);
+        HAL_UART_TxCpltCallback(huart);
+    }
+    if (sr & UART_SR_RXNE) {
+        ember_reg_clear_bits(&uart_map, UART_SR, UART_SR_RXNE, "clear RXNE", 0);
+        // read byte from rx_buf?
+        // The HAL callback typically reads DR; we'll just call the callback
+        HAL_UART_RxCpltCallback(huart);
+    }
+    if (sr & UART_SR_TC) {
+        ember_reg_clear_bits(&uart_map, UART_SR, UART_SR_TC, "clear TC", 0);
+    }
+}
+
+/* Weak default callbacks (overridden by test) */
+__attribute__((weak)) void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) { (void)huart; }
+__attribute__((weak)) void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) { (void)huart; }
+__attribute__((weak)) void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) { (void)huart; }

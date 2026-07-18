@@ -67,8 +67,10 @@ typedef struct EmberPeripheral {
 /* ---------- Bus event types (observable notifications) ---------- */
 typedef enum {
     BUS_EVT_TIMER_UPDATE,
+    BUS_EVT_UART_TX_DONE,
+    BUS_EVT_UART_RX_DONE,
     BUS_EVT_REGISTER_CHANGED,
-    // future: UART_TX, SPI_DONE, etc.
+    BUS_EVT_COUNT
 } BusEventType;
 
 typedef struct {
