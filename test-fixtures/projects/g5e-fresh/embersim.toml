@@ -3,8 +3,17 @@ name = "g5e-fresh"
 description = "Fresh external project — what an engineer writes before discovering EmberSim"
 
 [build]
-sources = ["Core/Src/main.c", "host_main.c"]
-includes = ["Core/Inc", "Drivers/CMSIS/Include"]
+sources = [
+    "Core/Src/main.c",
+    "host_main.c",
+]
+includes = [
+    "Core/Inc",
+    "Drivers/CMSIS/Include",
+    "Core/Src",
+]
+defines = []
+hal_header = ""
 
 [simulation]
 entry = "app_init"

@@ -293,18 +293,38 @@ pub fn check_project(
         });
     }
 
-    // Check HAL macros — always missing (no macro support in stubgen yet)
+    // Check HAL macros against generated cmsis_shim.h
+    let mut shim_macros = HashSet::new();
+    let shim_path = mocks_dir.join("cmsis_shim.h");
+    if shim_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&shim_path) {
+            let re = Regex::new(r"#define\s+(__HAL_[A-Za-z0-9_]+)\b").unwrap();
+            for cap in re.captures_iter(&content) {
+                shim_macros.insert(cap[1].to_string());
+            }
+        }
+    }
+
     for mac in &all_macros {
-        issue_count += 1;
-        items.push(CheckItem {
-            name: mac.clone(),
-            kind: CheckKind::HalMacro,
-            status: CheckStatus::Missing,
-            suggestion: Some(
-                "CMSIS macros are not simulated. Replace with equivalent mock_* API call or stub as empty macro."
-                    .into(),
-            ),
-        });
+        if shim_macros.contains(mac.as_str()) {
+            items.push(CheckItem {
+                name: mac.clone(),
+                kind: CheckKind::HalMacro,
+                status: CheckStatus::Supported,
+                suggestion: Some("Stub provided by cmsis_shim.h. Emits runtime warning — replace with mock_* API.".into()),
+            });
+        } else {
+            issue_count += 1;
+            items.push(CheckItem {
+                name: mac.clone(),
+                kind: CheckKind::HalMacro,
+                status: CheckStatus::Missing,
+                suggestion: Some(
+                    "CMSIS macro not simulated. Run 'embersim init --repair' to generate a compatibility stub."
+                        .into(),
+                ),
+            });
+        }
     }
 
     // Check include paths — report what the project needs

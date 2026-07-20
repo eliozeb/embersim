@@ -32,6 +32,8 @@ enum Commands {
         output: PathBuf,
         #[arg(long = "auto", short = 'a', action = clap::ArgAction::SetTrue)]
         auto: bool,
+        #[arg(long = "repair", action = clap::ArgAction::SetTrue)]
+        repair: bool,
     },
     /// Build the host binary from embersim.json configuration
     Build {
@@ -106,8 +108,25 @@ fn main() -> Result<()> {
             embersim_core::stubgen::generate(&functions, &output)?;
             eprintln!("Generated mocks in {}", output.display());
         }
-        Commands::Init { hal, include, define, output, auto } => {
-            if auto {
+        Commands::Init { hal, include, define, output, auto, repair } => {
+            if repair {
+                if !output.join("mocks").exists() {
+                    anyhow::bail!(
+                        "No simulation workspace found at {}. Run 'embersim init' first.",
+                        output.display()
+                    );
+                }
+                println!("Repairing project environment...\n");
+                let fixes = embersim_core::project::repair_project(&output)?;
+                if fixes.is_empty() {
+                    println!("No issues found. Project is ready.");
+                } else {
+                    for fix in &fixes {
+                        println!("  ✓ {}", fix);
+                    }
+                    println!("\nRun 'embersim check' to verify, then 'embersim run'.");
+                }
+            } else if auto {
                 let cwd = std::env::current_dir()?;
                 let config = embersim_core::discovery::discover(&cwd)?;
 
@@ -390,7 +409,11 @@ fn main() -> Result<()> {
             if !macros.is_empty() {
                 println!("CMSIS macros:");
                 for item in &macros {
-                    println!("  {:<40} MISSING", item.name);
+                    let mark = match item.status {
+                        embersim_core::check::CheckStatus::Supported => "STUBBED",
+                        _ => "MISSING",
+                    };
+                    println!("  {:<40} {}", item.name, mark);
                     if let Some(ref s) = item.suggestion {
                         println!("    → {}", s);
                     }
