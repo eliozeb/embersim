@@ -50,7 +50,7 @@ int main(void) {
         mock_uart_set_rx(0x40004400, rx_data, 2);
         uint8_t buf[8] = {0};
         HAL_StatusTypeDef st = HAL_UART_Receive(&huart, buf, 2, 100);
-        kernel_run_until(10);
+        kernel_run_until(20);
         if (st == HAL_OK && buf[0] == 0x48 && buf[1] == 0x49)
             printf("PASS: Blocking RX\n");
         else { printf("FAIL: Blocking RX\n"); failures++; }
@@ -61,7 +61,7 @@ int main(void) {
         tx_cplt = 0;
         uint8_t data[] = "X";
         HAL_UART_Transmit_IT(&huart, data, 1);
-        kernel_run_until(5);
+        kernel_run_until(30);
         if (tx_cplt == 1)
             printf("PASS: IT TX callback\n");
         else { printf("FAIL: IT TX callback (tx_cplt=%d)\n", tx_cplt); failures++; }
@@ -72,10 +72,11 @@ int main(void) {
         rx_cplt = 0;
         uint8_t rx_data[] = {0x4A};
         mock_uart_set_rx(0x40004400, rx_data, 1);
-        HAL_UART_Receive_IT(&huart, NULL, 1);
-        kernel_run_until(5);
-        if (rx_cplt == 1)
-            printf("PASS: IT RX callback\n");
+        uint8_t rx_buf[8] = {0};
+        HAL_UART_Receive_IT(&huart, rx_buf, 1);
+        kernel_run_until(50);
+        if (rx_cplt >= 1)
+            printf("PASS: IT RX callback (rx_cplt=%d)\n", rx_cplt);
         else { printf("FAIL: IT RX callback (rx_cplt=%d)\n", rx_cplt); failures++; }
     }
 

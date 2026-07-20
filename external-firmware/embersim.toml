@@ -1,0 +1,12 @@
+[project]
+name = "motor-controller"
+description = "Motor controller with TIM2 PWM speed control and USART2 telemetry"
+
+[build]
+sources = ["Core/Src/motor_control.c", "host_main.c"]
+includes = ["Core/Inc", "Core/Src", "Drivers/CMSIS/Include", "ember_sim/mocks"]
+
+[simulation]
+entry = "app_init"
+trace = "trace.jsonl"
+duration_ms = 100

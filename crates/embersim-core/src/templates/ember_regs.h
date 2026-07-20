@@ -1,10 +1,8 @@
 #ifndef EMBER_REGS_H
 #define EMBER_REGS_H
 
-#include "ember_regs.h"
-#include "ember_sim_kernel.h"
-#include "trace_log.h"
-#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 typedef struct EmberRegister {
     const char *name;

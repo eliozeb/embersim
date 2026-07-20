@@ -1,0 +1,11 @@
+[project]
+name = "manual-config-test"
+description = "Hand-written config — proves an engineer can configure EmberSim without init"
+
+[simulation]
+entry = "app_init"
+trace = "trace_test.jsonl"
+duration_ms = 50
+
+[firmware]
+entry = "app_init"

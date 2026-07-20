@@ -48,7 +48,7 @@ static bool     tx_active = false;
 /* ----- Public API (for tests) ----- */
 void mock_uart_init(void) {
     memset(uart_regs, 0, sizeof(uart_regs));
-    uart_regs[UART_SR].name = "SR";   uart_regs[UART_SR].writable_mask = 0x0000;
+    uart_regs[UART_SR].name = "SR";   uart_regs[UART_SR].writable_mask = 0xFFFF;
     uart_regs[UART_DR].name = "DR";   uart_regs[UART_DR].writable_mask = 0x00FF;
     uart_regs[UART_CR1].name = "CR1"; uart_regs[UART_CR1].writable_mask = 0xFFFF;
     uart_regs[UART_BRR].name = "BRR"; uart_regs[UART_BRR].writable_mask = 0xFFFF;
@@ -171,6 +171,7 @@ void HAL_UART_IRQHandler(UART_HandleTypeDef *huart) {
     }
     if (sr & UART_SR_RXNE) {
         ember_reg_clear_bits(&uart_map, UART_SR, UART_SR_RXNE, "clear RXNE", 0);
+        if (rx_pos < rx_len) rx_pos++;  /* consume byte (simulates DR read) */
         HAL_UART_RxCpltCallback(huart);
     }
     if (sr & UART_SR_TC) {

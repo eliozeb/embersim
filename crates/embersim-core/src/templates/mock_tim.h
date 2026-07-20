@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/* Initialize the TIM2 peripheral model. Must be called before any HAL_TIM_* functions. */
+void mock_tim_init(void);
+
 /* Set the update period (in ember ticks) for a timer instance.
    One tick = 1 µs unless changed by the scheduler. */
 void mock_tim_set_period_ticks(uintptr_t tim_base, uint32_t ticks);

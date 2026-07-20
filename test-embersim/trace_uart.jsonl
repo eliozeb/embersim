@@ -1,0 +1,23 @@
+# EmberSim trace v1.0
+{"ts_ms":0,"peripheral":"UART","func":"HAL_UART_Init","registered"}
+{"ts_ms":1,"peripheral":"UART","func":"HAL_UART_Transmit","started"}
+{"ts_ms":2,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"SR","old":"0x0000","new":"0x00C0","reason":"TX complete"}
+{"ts_ms":3,"peripheral":"runtime","func":"NVIC_DISPATCH",{"irq":38}}
+{"ts_ms":4,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"SR","old":"0x00C0","new":"0x0080","reason":"clear TC"}
+{"ts_ms":5,"peripheral":"runtime","func":"NVIC_DISPATCH",{"irq":38}}
+{"ts_ms":6,"peripheral":"UART","func":"HAL_UART_Transmit","started"}
+{"ts_ms":7,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"CR1","old":"0x0000","new":"0x0080","reason":"enable TXEIE"}
+{"ts_ms":8,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"SR","old":"0x0080","new":"0x00C0","reason":"TX complete"}
+{"ts_ms":9,"peripheral":"runtime","func":"HARDWARE_EVENT",{"layer":"hardware","uart":"40004400","event":"tx_done"}}
+{"ts_ms":10,"peripheral":"runtime","func":"NVIC_DISPATCH",{"irq":38}}
+{"ts_ms":11,"peripheral":"runtime","func":"SOFTWARE_EVENT","origin":"software","layer":"hal","component":"UART","event":"tx_complete","details":{}}
+{"ts_ms":12,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"SR","old":"0x00C0","new":"0x0040","reason":"clear TXE"}
+{"ts_ms":13,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"SR","old":"0x0040","new":"0x0000","reason":"clear TC"}
+{"ts_ms":14,"peripheral":"runtime","func":"NVIC_DISPATCH",{"irq":38}}
+{"ts_ms":15,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"CR1","old":"0x0080","new":"0x00A0","reason":"enable RXNEIE"}
+{"ts_ms":16,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"SR","old":"0x0000","new":"0x0020","reason":"RX byte ready"}
+{"ts_ms":17,"peripheral":"runtime","func":"HARDWARE_EVENT",{"layer":"hardware","uart":"40004400","event":"rx_done"}}
+{"ts_ms":18,"peripheral":"runtime","func":"NVIC_DISPATCH",{"irq":38}}
+{"ts_ms":19,"peripheral":"runtime","func":"SOFTWARE_EVENT","origin":"software","layer":"hal","component":"UART","event":"rx_complete","details":{}}
+{"ts_ms":20,"peripheral":"runtime","func":"REGISTER_EVENT","origin":"register","layer":"hardware","peripheral":"TIM2","address":"0x40004400","register":"SR","old":"0x0020","new":"0x0000","reason":"clear RXNE"}
+{"ts_ms":21,"peripheral":"runtime","func":"NVIC_DISPATCH",{"irq":38}}

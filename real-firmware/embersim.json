@@ -1,0 +1,9 @@
+{
+  "project": {
+    "name": "real-firmware",
+    "source_files": ["app.c"],
+    "exclude_files": [],
+    "hal_path": ".",
+    "hal_conf": ""
+  }
+}

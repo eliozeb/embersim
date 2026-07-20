@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use crate::model::{HalFunction, ProjectConfig};
+use crate::model::{EmberSimConfig, HalFunction, ProjectConfig};
 use crate::stubgen;
 use handlebars::Handlebars;
 
@@ -34,8 +34,27 @@ pub fn initialize(
 
     fs::write(output_dir.join("host_main.c"), crate::templates::HOST_MAIN_C)?;
 
+    // Generate minimal embersim.toml — describes intent, not build system
+    let config = EmberSimConfig {
+        project: crate::model::ProjectMeta {
+            name: "embersim-project".into(),
+            description: String::new(),
+        },
+        build: Default::default(),
+        simulation: crate::model::SimulationConfig::default(),
+    };
+    let toml_str = toml::to_string_pretty(&config)?;
+    fs::write(output_dir.join("embersim.toml"), toml_str)?;
+
     eprintln!("EmberSim workspace initialized in: {}", output_dir.display());
     Ok(())
+}
+
+/// Load embersim.toml configuration
+pub fn load_toml_config(path: &Path) -> Result<EmberSimConfig> {
+    let contents = fs::read_to_string(path)
+        .with_context(|| format!("Cannot read config: {}", path.display()))?;
+    toml::from_str(&contents).context("Invalid embersim.toml format")
 }
 
 /// Load project configuration from embersim.json

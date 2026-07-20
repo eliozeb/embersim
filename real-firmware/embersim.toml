@@ -1,0 +1,14 @@
+[project]
+name = "real-firmware"
+description = "Production-like STM32 firmware using TIM2 periodic interrupt and USART2 data transmit"
+
+[build]
+sources = ["app.c", "host_main.c"]
+includes = ["../test-embersim/mocks"]
+defines = ["EMBERSIM_MOCK"]
+hal_header = ""
+
+[simulation]
+entry = "app_init"
+trace = "trace_firmware.jsonl"
+duration_ms = 50

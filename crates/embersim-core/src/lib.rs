@@ -13,3 +13,6 @@ pub mod project;
 
 //Day 9
 pub mod discovery;
+
+//Trace comparison (G5b)
+pub mod trace;

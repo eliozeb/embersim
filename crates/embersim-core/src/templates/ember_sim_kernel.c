@@ -171,14 +171,13 @@ void kernel_schedule_event(uint32_t delay_us, KernelEventType type,
 }
 
 void kernel_advance_ticks(uint32_t us) {
-    for (uint32_t i = 0; i < us; i++) {
-        for (int j = 0; j < peripheral_count; j++) {
-            if (peripherals[j]->tick) {
-                peripherals[j]->tick(peripherals[j], sim_time_us);
-            }
+    uint64_t ns = us * 1000ULL;
+    for (int i = 0; i < peripheral_count; i++) {
+        if (peripherals[i]->tick) {
+            peripherals[i]->tick(peripherals[i], ns);
         }
-        sim_time_us++;
     }
+    sim_time_us += us;
 }
 
 void kernel_dispatch_pending(void) {
@@ -260,11 +259,12 @@ void ember_bus_dispatch_all(void) {
    NVIC helpers
    ================================================================= */
 static uint32_t periph_to_irq(uint32_t base) {
-    switch (base) {
-        case 0x40000400: return 28; // TIM2
-        case 0x40004400: return 38; // USART2
-        default:         return 0;
+    for (int i = 0; i < peripheral_count; i++) {
+        if (peripherals[i]->base_address == base && peripherals[i]->irq_number) {
+            return peripherals[i]->irq_number;
+        }
     }
+    return 0;
 }
 
 static void nvic_bus_handler(const BusEvent *ev) {

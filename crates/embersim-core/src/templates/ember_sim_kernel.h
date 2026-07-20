@@ -53,14 +53,17 @@ typedef void (*PeripheralHandleEvent)(struct EmberPeripheral *p, const KernelEve
 
 /* ---------- peripheral interface ---------- */
 typedef struct EmberPeripheral {
-    const char *name;
-    uint32_t    base_address;
-    uint32_t    irq_number;
-    void       *state;
+    const char *name;               // human‑readable, e.g. "TIM2"
+    uint32_t    base_address;       // peripheral base (0x40000400, etc.)
+    uint32_t    irq_number;         // NVIC IRQ number (0 if none)
+    void       *state;              // opaque instance data
 
+    /* Lifecycle methods */
     void (*init)(struct EmberPeripheral *p);
-    void (*tick)(struct EmberPeripheral *p, uint64_t now_us);
-    void (*handle_event)(struct EmberPeripheral *p, const KernelEvent *ev);
+    void (*reset)(struct EmberPeripheral *p);
+    void (*tick)(struct EmberPeripheral *p, uint64_t elapsed_ns);
+    void (*handle_event)(struct EmberPeripheral *p, const struct KernelEvent *ev);
+    void (*shutdown)(struct EmberPeripheral *p);
 } EmberPeripheral;
 
 
