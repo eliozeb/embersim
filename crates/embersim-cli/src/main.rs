@@ -309,7 +309,7 @@ fn main() -> Result<()> {
             println!("Trace generated ({} events)", candidate.len());
 
             // Compare against baseline
-            let baseline = PathBuf::from(".embersim/baseline/trace.jsonl");
+            let baseline = PathBuf::from("baseline/trace.jsonl");
             if baseline.exists() {
                 println!("Comparing baseline...");
                 let baseline_events = embersim_core::trace::parse_trace(&baseline)?;
@@ -474,17 +474,31 @@ jobs:
       - name: Install gcc (host compiler)
         run: sudo apt-get install -y gcc
 
+      - name: Checkout EmberSim
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.EMBERSIM_REPO || 'eliozeb/embersim' }}
+          path: _embersim
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: _embersim
+
       - name: Build EmberSim CLI
-        run: cargo build -p embersim-cli --release
+        run: cargo build --manifest-path _embersim/Cargo.toml -p embersim-cli --release
 
       - name: Initialize simulation workspace
-        run: cargo run -p embersim-cli --release -- init -f ${{ env.HAL_HEADER }} -I Core/Inc -I Drivers/CMSIS/Include -o ember_sim
+        run: cargo run --manifest-path _embersim/Cargo.toml -p embersim-cli --release -- init -f ${{ vars.HAL_HEADER }} -I Core/Inc -I Drivers/CMSIS/Include -o ember_sim
 
       - name: Check project readiness
-        run: cargo run -p embersim-cli --release -- check -o ember_sim
+        run: cargo run --manifest-path _embersim/Cargo.toml -p embersim-cli --release -- check -o ember_sim
 
       - name: Run firmware regression
-        run: cargo run -p embersim-cli --release -- run -o ember_sim
+        run: cargo run --manifest-path _embersim/Cargo.toml -p embersim-cli --release -- run -o ember_sim
+
+      - name: Compare regression baseline
+        run: cargo run --manifest-path _embersim/Cargo.toml -p embersim-cli --release -- compare -g baseline/trace.jsonl -c trace.jsonl
 "#;
 
             if workflow_path.exists() {
@@ -495,14 +509,19 @@ jobs:
                 println!("CI workflow generated: {}", workflow_path.display());
                 println!();
                 println!("Next steps:");
-                println!("  1. Set HAL_HEADER environment variable in your repository:");
+                println!("  1. Set HAL_HEADER repository variable:");
                 println!("     GitHub → Settings → Secrets and variables → Actions → Variables");
                 println!("     Name: HAL_HEADER");
                 println!("     Value: Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h");
                 println!();
-                println!("  2. Commit and push. EmberSim will run on every push and PR.");
+                println!("  2. (Optional) To use a fork of EmberSim, also set EMBERSIM_REPO:");
+                println!("     Name: EMBERSIM_REPO");
+                println!("     Value: your-org/embersim");
+                println!("     Default: eliozeb/embersim (used automatically if not set)");
                 println!();
-                println!("  3. Run 'embersim baseline create' locally and commit .embersim/baseline/trace.jsonl");
+                println!("  3. Commit and push. EmberSim will run on every push and PR.");
+                println!();
+                println!("  4. Run 'embersim baseline create' locally and commit baseline/trace.jsonl");
                 println!("     as your known-good reference.");
             }
         }
@@ -546,7 +565,7 @@ jobs:
                 if !trace.exists() {
                     anyhow::bail!("Trace file not found: {}\nRun firmware first to generate a trace.", trace.display());
                 }
-                let baseline_dir = PathBuf::from(".embersim/baseline");
+                let baseline_dir = PathBuf::from("baseline");
                 std::fs::create_dir_all(&baseline_dir)?;
                 let dest = baseline_dir.join("trace.jsonl");
                 std::fs::copy(&trace, &dest)?;
@@ -557,7 +576,7 @@ jobs:
             }
         },
         Commands::Test { config, output } => {
-            let baseline = PathBuf::from(".embersim/baseline/trace.jsonl");
+            let baseline = PathBuf::from("baseline/trace.jsonl");
             if !baseline.exists() {
                 anyhow::bail!(
                     "No baseline found at {}\nRun 'embersim baseline create' first.",
