@@ -11,28 +11,30 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Generate HAL mock stubs from a preprocessed header (low-level; prefer 'init' for full workspace)
     Generate {
-        #[arg(short = 'f', long, value_name = "FILE")]
+        #[arg(short = 'f', long, value_name = "FILE", help = "Path to the STM32 HAL master header (e.g. stm32f4xx_hal.h)")]
         hal: PathBuf,
-        #[arg(short = 'I', long = "include", value_name = "DIR")]
+        #[arg(short = 'I', long = "include", value_name = "DIR", help = "Add an include directory for header resolution (repeatable)")]
         include: Vec<String>,
-        #[arg(short = 'D', long = "define", value_name = "MACRO")]
+        #[arg(short = 'D', long = "define", value_name = "MACRO", help = "Define a preprocessor macro (repeatable)")]
         define: Vec<String>,
-        #[arg(short = 'o', long, value_name = "DIR", default_value = "ember_sim/mocks")]
+        #[arg(short = 'o', long, value_name = "DIR", default_value = "ember_sim/mocks", help = "Output directory for generated mocks")]
         output: PathBuf,
     },
+    /// Initialize a simulation workspace from an STM32 HAL header
     Init {
-        #[arg(short = 'f', long, value_name = "FILE")]
+        #[arg(short = 'f', long, value_name = "FILE", help = "Path to the STM32 HAL master header (e.g. stm32f4xx_hal.h)")]
         hal: Option<PathBuf>,  // optional when --auto is used
-        #[arg(short = 'I', long = "include", value_name = "DIR")]
+        #[arg(short = 'I', long = "include", value_name = "DIR", help = "Add an include directory for header resolution (repeatable)")]
         include: Vec<String>,
-        #[arg(short = 'D', long = "define", value_name = "MACRO")]
+        #[arg(short = 'D', long = "define", value_name = "MACRO", help = "Define a preprocessor macro (repeatable)")]
         define: Vec<String>,
-        #[arg(short = 'o', long, value_name = "DIR", default_value = "ember_sim")]
+        #[arg(short = 'o', long, value_name = "DIR", default_value = "ember_sim", help = "Output directory for the generated workspace")]
         output: PathBuf,
-        #[arg(long = "auto", short = 'a', action = clap::ArgAction::SetTrue)]
+        #[arg(long = "auto", short = 'a', action = clap::ArgAction::SetTrue, help = "Auto-detect project structure (no -f required; scans for HAL headers)")]
         auto: bool,
-        #[arg(long = "repair", action = clap::ArgAction::SetTrue)]
+        #[arg(long = "repair", action = clap::ArgAction::SetTrue, help = "Repair an existing workspace: generate missing shims, update config")]
         repair: bool,
     },
     /// Build the host binary from embersim.json configuration

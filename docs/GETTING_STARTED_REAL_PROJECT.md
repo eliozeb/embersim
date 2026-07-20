@@ -1,5 +1,12 @@
 # Getting Started: Add EmberSim to Your Firmware Project
 
+> **Deprecated.** This document was written for an earlier version of EmberSim
+> and may contain outdated instructions. See [GETTING_STARTED.md](GETTING_STARTED.md)
+> for the current onboarding guide, [CI_SETUP.md](CI_SETUP.md) for the current
+> CI workflow, and [HAL_BOUNDARY.md](HAL_BOUNDARY.md) for HAL boundary guidance.
+>
+> This file is retained for historical reference.
+
 This guide assumes you have an existing STM32 firmware project and want to add deterministic regression testing without hardware.
 
 **Target time to first trace: under 1 hour.**
