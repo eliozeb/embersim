@@ -1,0 +1,12 @@
+[project]
+name = "g5e-fresh"
+description = "Fresh external project — what an engineer writes before discovering EmberSim"
+
+[build]
+sources = ["Core/Src/main.c", "host_main.c"]
+includes = ["Core/Inc", "Drivers/CMSIS/Include"]
+
+[simulation]
+entry = "app_init"
+trace = "trace.jsonl"
+duration_ms = 50

@@ -72,6 +72,11 @@ enum Commands {
         #[command(subcommand)]
         action: BaselineAction,
     },
+    /// Analyze project readiness — report missing HAL symbols, macros, and includes
+    Check {
+        #[arg(short = 'o', long, value_name = "DIR", default_value = "ember_sim")]
+        output: PathBuf,
+    },
     /// Build, execute, and compare against the regression baseline
     Test {
         #[arg(short = 'c', long, value_name = "FILE", default_value = "embersim.json")]
@@ -310,6 +315,110 @@ fn main() -> Result<()> {
                 }
             } else {
                 println!("No baseline found. Run 'embersim baseline create' to set one.");
+            }
+        }
+        Commands::Check { output } => {
+            let config_path = PathBuf::from("embersim.toml");
+            let cfg = if config_path.exists() {
+                Some(embersim_core::project::load_toml_config(&config_path)?)
+            } else {
+                None
+            };
+
+            let mocks_dir = output.join("mocks");
+            if !mocks_dir.exists() {
+                anyhow::bail!(
+                    "Mocks not found at {}. Run 'embersim init' first.",
+                    mocks_dir.display()
+                );
+            }
+
+            let sources: Vec<String> = if let Some(ref c) = cfg {
+                c.build.sources.clone()
+            } else {
+                Vec::new()
+            };
+            let includes: Vec<String> = if let Some(ref c) = cfg {
+                c.build.includes.clone()
+            } else {
+                Vec::new()
+            };
+
+            println!("Project analysis\n");
+            let result = embersim_core::check::check_project(&sources, &includes, &mocks_dir)?;
+
+            // Group by kind
+            let funcs: Vec<_> = result.items.iter().filter(|i| i.kind == embersim_core::check::CheckKind::HalFunction).collect();
+            let types: Vec<_> = result.items.iter().filter(|i| i.kind == embersim_core::check::CheckKind::HalType).collect();
+            let macros: Vec<_> = result.items.iter().filter(|i| i.kind == embersim_core::check::CheckKind::HalMacro).collect();
+            let includes: Vec<_> = result.items.iter().filter(|i| i.kind == embersim_core::check::CheckKind::IncludePath).collect();
+
+            if !funcs.is_empty() {
+                println!("HAL functions:");
+                for item in &funcs {
+                    let mark = match item.status {
+                        embersim_core::check::CheckStatus::Supported => "OK",
+                        _ => "MISSING",
+                    };
+                    println!("  {:<40} {}", item.name, mark);
+                    if let Some(ref s) = item.suggestion {
+                        if item.status != embersim_core::check::CheckStatus::Supported {
+                            println!("    → {}", s);
+                        }
+                    }
+                }
+                println!();
+            }
+
+            if !types.is_empty() {
+                println!("HAL types:");
+                for item in &types {
+                    let mark = match item.status {
+                        embersim_core::check::CheckStatus::Supported => "OK",
+                        _ => "MISSING",
+                    };
+                    println!("  {:<40} {}", item.name, mark);
+                    if let Some(ref s) = item.suggestion {
+                        if item.status != embersim_core::check::CheckStatus::Supported {
+                            println!("    → {}", s);
+                        }
+                    }
+                }
+                println!();
+            }
+
+            if !macros.is_empty() {
+                println!("CMSIS macros:");
+                for item in &macros {
+                    println!("  {:<40} MISSING", item.name);
+                    if let Some(ref s) = item.suggestion {
+                        println!("    → {}", s);
+                    }
+                }
+                println!();
+            }
+
+            if !includes.is_empty() {
+                println!("Includes:");
+                for item in &includes {
+                    let mark = match item.status {
+                        embersim_core::check::CheckStatus::Supported => "OK",
+                        _ => "SUGGESTED",
+                    };
+                    println!("  {:<40} {}", item.name, mark);
+                    if let Some(ref s) = item.suggestion {
+                        println!("    → {}", s);
+                    }
+                }
+                println!();
+            }
+
+            let issues = result.issue_count;
+            if issues == 0 {
+                println!("Result: ready to run.\nRun 'embersim run' to build and execute.");
+            } else {
+                println!("Result: {} issue(s) before simulation.", issues);
+                println!("Fix the MISSING items above, then run 'embersim run'.");
             }
         }
         Commands::Doctor => {

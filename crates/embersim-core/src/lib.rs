@@ -16,3 +16,6 @@ pub mod discovery;
 
 //Trace comparison (G5b)
 pub mod trace;
+
+//Project readiness check (S6.1)
+pub mod check;

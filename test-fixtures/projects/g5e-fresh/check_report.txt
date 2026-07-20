@@ -1,0 +1,29 @@
+﻿
+Project analysis
+
+HAL functions:
+  HAL_TIM_Base_Init                        OK
+  HAL_TIM_Base_Start_IT                    OK
+  HAL_TIM_PeriodElapsedCallback            OK
+  HAL_UART_Transmit                        OK
+  HAL_UART_Init                            OK
+
+HAL types:
+  UART_HandleTypeDef                       OK
+  TIM_HandleTypeDef                        MISSING
+    → Type provided by mock_hal.h but not found in configured HAL headers. Add '#include "mock_hal.h"' to your firmware sources.
+
+CMSIS macros:
+  __HAL_TIM_SET_AUTORELOAD                 MISSING
+    → CMSIS macros are not simulated. Replace with equivalent mock_* API call or stub as empty macro.
+
+Includes:
+  ember_sim_kernel.h                       OK
+  stm32f4xx_hal.h                          OK
+  mock_hal.h                               OK
+  trace_log.h                              OK
+
+Result: 2 issue(s) before simulation.
+Fix the MISSING items above, then run 'embersim run'.
+
+
