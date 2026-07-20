@@ -1,0 +1,12 @@
+[project]
+name = "ci-test"
+description = "S6.4 CI validation project"
+
+[build]
+sources = ["app.c", "host_main.c"]
+includes = ["."]
+
+[simulation]
+entry = "app_init"
+trace = "trace.jsonl"
+duration_ms = 50

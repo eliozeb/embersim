@@ -1,7 +1,8 @@
 /* main.c — What an external engineer naturally writes.
    Uses standard STM32 HAL patterns. No EmberSim-specific knowledge. */
 
-#include "stm32f4xx_hal.h"
+#include "mock_hal.h"
+#include "cmsis_shim.h"
 #include <string.h>
 
 static TIM_HandleTypeDef htim2;

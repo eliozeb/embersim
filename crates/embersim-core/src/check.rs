@@ -255,7 +255,7 @@ pub fn check_project(
                     kind: CheckKind::HalType,
                     status: CheckStatus::Missing,
                     suggestion: Some(
-                        "Type provided by mock_hal.h but not found in configured HAL headers. Add '#include \"mock_hal.h\"' to your firmware sources.".into(),
+                        "Replace '#include \"stm32f4xx_hal.h\"' with '#include \"mock_hal.h\"' for simulation builds. EmberSim does not modify firmware semantics automatically — the firmware must explicitly select the simulation HAL boundary.".into(),
                     ),
                 });
             } else {
@@ -311,7 +311,7 @@ pub fn check_project(
                 name: mac.clone(),
                 kind: CheckKind::HalMacro,
                 status: CheckStatus::Supported,
-                suggestion: Some("Stub provided by cmsis_shim.h. Emits runtime warning — replace with mock_* API.".into()),
+                suggestion: Some("Stub provided by cmsis_shim.h. Add '#include \"cmsis_shim.h\"' to firmware sources. Emits runtime warning — replace with mock_* API in production.".into()),
             });
         } else {
             issue_count += 1;

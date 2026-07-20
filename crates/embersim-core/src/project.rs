@@ -47,6 +47,11 @@ pub fn initialize(
     fs::write(output_dir.join("embersim.toml"), toml_str)?;
 
     eprintln!("EmberSim workspace initialized in: {}", output_dir.display());
+    eprintln!();
+    eprintln!("Next step:");
+    eprintln!("  embersim check -o {}", output_dir.display());
+    eprintln!();
+    eprintln!("This validates HAL coverage and identifies required simulation adaptations.");
     Ok(())
 }
 
@@ -135,7 +140,7 @@ pub fn repair_project(output_dir: &Path) -> Result<Vec<String>> {
         shim.push_str("#endif /* CMSIS_SHIM_H */\n");
         fs::write(mocks_dir.join("cmsis_shim.h"), &shim)?;
         fixes.push(format!(
-            "Created cmsis_shim.h with {} macro stub(s): {}",
+            "Created cmsis_shim.h with {} macro stub(s): {}. Add '#include \"cmsis_shim.h\"' to firmware sources.",
             missing_macros.len(),
             missing_macros.join(", ")
         ));
