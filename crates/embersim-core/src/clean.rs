@@ -13,11 +13,21 @@ pub fn normalize(preprocessed: &str) -> Result<Vec<String>> {
     )?;
     let cleaned = re_keywords.replace_all(&no_attr, "");
 
-    let normalized = cleaned.replace('\n', " ");
+    // Split on newlines first (handles #define, typedef, struct, enum),
+    // then split each line on semicolons (handles multiple decls per line).
+    let mut result = Vec::new();
+    for line in cleaned.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        for segment in line.split(';') {
+            let segment = segment.trim().to_string();
+            if !segment.is_empty() {
+                result.push(segment);
+            }
+        }
+    }
 
-    Ok(normalized
-        .split(';')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect())
+    Ok(result)
 }

@@ -83,6 +83,11 @@ const uint8_t *mock_uart_get_tx(uintptr_t base, uint16_t *len) {
 /* ----- HAL API functions ----- */
 HAL_StatusTypeDef HAL_UART_Init(UART_HandleTypeDef *huart) {
     (void)huart;
+    static bool initialized = false;
+    if (!initialized) {
+        mock_uart_init();
+        initialized = true;
+    }
     kernel_register_peripheral(&uart_peripheral);
     trace_log("HAL_UART_Init", "\"registered\"");
     return HAL_OK;
