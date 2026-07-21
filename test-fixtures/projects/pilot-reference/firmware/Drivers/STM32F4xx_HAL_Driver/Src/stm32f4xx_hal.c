@@ -22,7 +22,6 @@ void HAL_GPIO_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState s){
 void HAL_GPIO_TogglePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)                { (void)GPIOx; (void)GPIO_Pin; }
 HAL_StatusTypeDef HAL_GPIO_LockPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)     { (void)GPIOx; (void)GPIO_Pin; return HAL_OK; }
 void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin)                                { (void)GPIO_Pin; }
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)                                  { (void)GPIO_Pin; }
 
 /* UART */
 HAL_StatusTypeDef HAL_UART_Init(UART_HandleTypeDef *huart)                      { (void)huart; return HAL_OK; }
@@ -36,7 +35,6 @@ HAL_StatusTypeDef HAL_UART_Receive_IT(UART_HandleTypeDef *huart, uint8_t *pData,
     { (void)huart; (void)pData; (void)Size; return HAL_OK; }
 void HAL_UART_IRQHandler(UART_HandleTypeDef *huart)                             { (void)huart; }
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)                         { (void)huart; }
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)                         { (void)huart; }
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)                          { (void)huart; }
 
 /* TIM */
@@ -49,7 +47,6 @@ HAL_StatusTypeDef HAL_TIM_PWM_ConfigChannel(TIM_HandleTypeDef *htim, TIM_OC_Init
 HAL_StatusTypeDef HAL_TIM_PWM_Start(TIM_HandleTypeDef *htim, uint32_t Channel)  { (void)htim; (void)Channel; return HAL_OK; }
 HAL_StatusTypeDef HAL_TIM_PWM_Stop(TIM_HandleTypeDef *htim, uint32_t Channel)   { (void)htim; (void)Channel; return HAL_OK; }
 void HAL_TIM_IRQHandler(TIM_HandleTypeDef *htim)                                 { (void)htim; }
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)                      { (void)htim; }
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)                  { (void)htim; }
 
 /* SPI */

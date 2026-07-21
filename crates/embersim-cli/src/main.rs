@@ -278,13 +278,20 @@ fn main() -> Result<()> {
                 objects.push(obj);
             }
 
-            // Link
+            // Link — order matters: peripheral models (strong) before mock_hal (weak fallbacks)
             let exe = std::env::current_dir()?.join("firmware.exe");
             let mut link_cmd = std::process::Command::new("gcc");
             for obj in &objects {
                 link_cmd.arg(obj);
             }
-            for obj in &mock_objects {
+            // Sort: peripheral model .o files first, mock_hal.o last
+            let mut sorted_mocks = mock_objects.clone();
+            sorted_mocks.sort_by(|a, b| {
+                let a_is_hal = a.file_name().map_or(false, |n| n == "mock_hal.o");
+                let b_is_hal = b.file_name().map_or(false, |n| n == "mock_hal.o");
+                a_is_hal.cmp(&b_is_hal) // false < true, so mock_hal.o sorts last
+            });
+            for obj in &sorted_mocks {
                 link_cmd.arg(obj);
             }
             link_cmd.arg("-o").arg(&exe);

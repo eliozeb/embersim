@@ -53,7 +53,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJS)
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(OBJS) -o $@ -lm
+	$(CC) $(CFLAGS) $(OBJS) -o $@
 	@echo "Build successful: $(TARGET)"
 
 $(BUILD_DIR)/%.o: %.c

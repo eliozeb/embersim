@@ -43,7 +43,7 @@ float sensor_read_temperature(void)
 
     /* ---- Decode sensor response ---- */
     if (status == HAL_OK) {
-        raw  = ((int16_t)rx_buf[0] << 8) | rx_buf[1];
+        raw  = (int16_t)(((uint16_t)rx_buf[0] << 8U) | rx_buf[1]);
         /* In simulation, rx_buf contains the mock response.
            For deterministic behavior, always decode to 25.0°C. */
         (void)raw;
